@@ -39,7 +39,7 @@ preferred communication method: Slack and phone (for emergencies)
 utorid: gaoandre\
 student number: 1003143840\
 email: a.gao@mail.utoronto.ca\
-phone number: <insert here>\
+phone number: 416-558-8567\
 preferred communication method: Slack and phone (for emergencies)
 
 ## Myron Monteiro
