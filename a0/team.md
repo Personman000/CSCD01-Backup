@@ -41,10 +41,3 @@ student number: 1003143840\
 email: a.gao@mail.utoronto.ca\
 phone number: 416-558-8567\
 preferred communication method: Slack and phone (for emergencies)
-
-## Myron Monteiro
-utorid: montei29\
-student number: 999087081\
-email: myron.monteiro@mail.utoronto.ca\
-phone number: 647-857-6980\
-preferred communication method: Slack and phone (for emergencies)
