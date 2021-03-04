@@ -115,7 +115,7 @@ class SequentialFeatureSelector(SelectorMixin, MetaEstimatorMixin,
         self.cv = cv
         self.n_jobs = n_jobs
 
-    def fit(self, X, y):
+    def fit(self, X, y=None):
         """Learn the features to select.
 
         Parameters
@@ -130,12 +130,19 @@ class SequentialFeatureSelector(SelectorMixin, MetaEstimatorMixin,
         self : object
         """
         tags = self._get_tags()
-        X, y = self._validate_data(
-            X, y, accept_sparse="csc",
+        if(y is None):
+            X = self._validate_data(
+            X, accept_sparse="csc",
             ensure_min_features=2,
             force_all_finite=not tags.get("allow_nan", True),
-            multi_output=True
         )
+        else:
+            X, y = self._validate_data(
+                X, y, accept_sparse="csc",
+                ensure_min_features=2,
+                force_all_finite=not tags.get("allow_nan", True),
+                multi_output=True
+            )
         n_features = X.shape[1]
 
         error_msg = ("n_features_to_select must be either None, an "
@@ -209,5 +216,5 @@ class SequentialFeatureSelector(SelectorMixin, MetaEstimatorMixin,
     def _more_tags(self):
         return {
             'allow_nan': _safe_tags(self.estimator, key="allow_nan"),
-            'requires_y': True,
+            'requires_y': False,
         }
