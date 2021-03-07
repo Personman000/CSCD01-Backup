@@ -1519,8 +1519,8 @@ def check_poisson_regression(name, criterion):
                           "and score = %f" % (criterion, score))
 
 
-@pytest.mark.parametrize('name', ("RandomForestRegressor"))
-@pytest.mark.parametrize('criterion', ("poisson"))
+@pytest.mark.parametrize('name', ["RandomForestRegressor"])
+@pytest.mark.parametrize('criterion', ["poisson"])
 def test_poisson_regression(name, criterion):
     # Similar to test_regression function but uses y_reg_non_neg in the dataset
     # Poisson requires tests with no negative values
