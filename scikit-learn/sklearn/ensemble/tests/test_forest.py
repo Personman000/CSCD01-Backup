@@ -75,6 +75,10 @@ iris.target = iris.target[perm]
 X_reg, y_reg = datasets.make_regression(n_samples=500, n_features=10,
                                         random_state=1)
 
+# Adjusted regression dataset with no negative values on y
+y_reg_min = np.abs(np.min(y_reg)) + 1
+y_reg_non_neg = np.array(y_reg) + y_reg_min
+
 # also make a hastie_10_2 dataset
 hastie_X, hastie_y = datasets.make_hastie_10_2(n_samples=20, random_state=1)
 hastie_X = hastie_X.astype(np.float32)
@@ -161,22 +165,37 @@ def check_regression_criterion(name, criterion):
 
     reg = ForestRegressor(n_estimators=5, criterion=criterion,
                           random_state=1)
-    reg.fit(X_reg, y_reg)
-    score = reg.score(X_reg, y_reg)
-    assert score > 0.93, ("Failed with max_features=None, criterion %s "
-                          "and score = %f" % (criterion, score))
+
+    if (criterion == "poisson"):
+        y_reg_array = y_reg_non_neg
+        expected_score_no_max_features = 0.9
+        expected_score_max_features = 0.9
+    else:
+        y_reg_array = y_reg
+        expected_score_no_max_features = 0.93
+        expected_score_max_features = 0.92
+
+    reg.fit(X_reg, y_reg_array)
+    score = reg.score(X_reg, y_reg_array)
+    assert score > expected_score_no_max_features, (
+        "Failed with max_features=None, criterion %s "
+        "and score = %f" % (criterion, score))
 
     reg = ForestRegressor(n_estimators=5, criterion=criterion,
                           max_features=6, random_state=1)
-    reg.fit(X_reg, y_reg)
-    score = reg.score(X_reg, y_reg)
-    assert score > 0.92, ("Failed with max_features=6, criterion %s "
-                          "and score = %f" % (criterion, score))
+    reg.fit(X_reg, y_reg_array)
+    score = reg.score(X_reg, y_reg_array)
+    assert score > expected_score_max_features, (
+        "Failed with max_features=6, criterion %s "
+        "and score = %f" % (criterion, score))
 
 
 @pytest.mark.parametrize('name', FOREST_REGRESSORS)
-@pytest.mark.parametrize('criterion', ("mse", "mae", "friedman_mse"))
+@pytest.mark.parametrize('criterion',
+                         ("mse", "mae", "friedman_mse", "poisson"))
 def test_regression(name, criterion):
+    if (name != "RandomForestRegressor" and criterion == "poisson"):
+        pytest.skip("Poisson is available only for RandomForestRegressor")
     check_regression_criterion(name, criterion)
 
 
@@ -260,9 +279,11 @@ def check_importances(name, criterion, dtype, tolerance):
         itertools.chain(product(FOREST_CLASSIFIERS,
                                 ["gini", "entropy"]),
                         product(FOREST_REGRESSORS,
-                                ["mse", "friedman_mse", "mae"])))
+                                ["mse", "friedman_mse", "mae", "poisson"])))
 def test_importances(dtype, name, criterion):
     tolerance = 0.01
+    if (name != "RandomForestRegressor" and criterion == "poisson"):
+        pytest.skip("Poisson is available only for RandomForestRegressor")
     if name in FOREST_REGRESSORS and criterion == "mae":
         tolerance = 0.05
     check_importances(name, criterion, dtype, tolerance)
@@ -1494,3 +1515,12 @@ def test_n_features_deprecation(Estimator):
 
     with pytest.warns(FutureWarning, match="n_features_ was deprecated"):
         est.n_features_
+
+
+def test_random_forest_regressor_negative_value():
+    X = np.array([1, 2, 5]).reshape(-1, 1)
+    y = np.array([-3, 6, 2]).reshape(-1, 1)
+    est = RandomForestRegressor(criterion="poisson")
+    with pytest.raises(ValueError,
+                       match="The array.*contain a negative entry.*Poisson"):
+        est.fit(X, y)
