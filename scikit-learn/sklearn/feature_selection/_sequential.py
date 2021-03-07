@@ -122,7 +122,7 @@ class SequentialFeatureSelector(SelectorMixin, MetaEstimatorMixin,
         ----------
         X : array-like of shape (n_samples, n_features)
             Training vectors.
-        y : array-like of shape (n_samples,)
+        y : array-like of shape (n_samples,), default=None
             Target values.
 
         Returns
