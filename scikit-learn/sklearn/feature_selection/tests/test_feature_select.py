@@ -667,3 +667,25 @@ def test_mutual_info_regression():
     gtruth = np.zeros(10)
     gtruth[:2] = 1
     assert_array_equal(support, gtruth)
+
+@pytest.mark.parametrize('n_features_to_select', (3,4,5))
+def test_unsupervised_model_fit(n_features_to_select):
+    X, y = make_blobs(n_features=6)
+    sfs = SequentialFeatureSelector(
+        KMeans(),
+        n_features_to_select = n_features_to_select,
+    )
+    sfs.fit(X)
+    assert(sfs.transform(X).shape[1] == n_features_to_select)
+
+@pytest.mark.parametrize('y', ('no_validation', 2j, 22.2, np.nan))
+def test_no_y_validation_model_fit(y):
+    # Test to see if y(clusters) takes any invalid values
+    X, clusters = make_blobs(n_features=6)
+    sfs = SequentialFeatureSelector(
+        KMeans(),
+        n_features_to_select = 3,
+    )
+
+    with pytest.raises((TypeError, ValueError)):
+        sfs.fit(X, y)
