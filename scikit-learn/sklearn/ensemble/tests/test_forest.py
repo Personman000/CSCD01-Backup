@@ -75,6 +75,10 @@ iris.target = iris.target[perm]
 X_reg, y_reg = datasets.make_regression(n_samples=500, n_features=10,
                                         random_state=1)
 
+# Adjusted regression dataset with no negative values on y
+y_reg_min = np.abs(np.min(y_reg)) + 1
+y_reg_non_neg = np.array(y_reg) + y_reg_min
+
 # also make a hastie_10_2 dataset
 hastie_X, hastie_y = datasets.make_hastie_10_2(n_samples=20, random_state=1)
 hastie_X = hastie_X.astype(np.float32)
@@ -1494,3 +1498,40 @@ def test_n_features_deprecation(Estimator):
 
     with pytest.warns(FutureWarning, match="n_features_ was deprecated"):
         est.n_features_
+
+
+def check_poisson_regression(name, criterion):
+    # Check consistency on regression dataset.
+    ForestRegressor = FOREST_REGRESSORS[name]
+
+    reg = ForestRegressor(n_estimators=5, criterion=criterion,
+                          random_state=1)
+    reg.fit(X_reg, y_reg_non_neg)
+    score = reg.score(X_reg, y_reg_non_neg)
+    assert score > 0.90, ("Failed with max_features=None, criterion %s "
+                          "and score = %f" % (criterion, score))
+
+    reg = ForestRegressor(n_estimators=5, criterion=criterion,
+                          max_features=6, random_state=1)
+    reg.fit(X_reg, y_reg_non_neg)
+    score = reg.score(X_reg, y_reg_non_neg)
+    assert score > 0.90, ("Failed with max_features=6, criterion %s "
+                          "and score = %f" % (criterion, score))
+
+
+@pytest.mark.parametrize('name', ["RandomForestRegressor"])
+@pytest.mark.parametrize('criterion', ["poisson"])
+def test_poisson_regression(name, criterion):
+    # Similar to test_regression function but uses y_reg_non_neg in the dataset
+    # Poisson requires tests with no negative values
+    check_poisson_regression(name, criterion)
+
+
+def test_random_forest_regressor_negative_value():
+    # Test RandomForestRegressor with negative y values
+    X = np.array([1, 2, 5]).reshape(-1, 1)
+    y = np.array([-3, 6, 2]).reshape(-1, 1)
+    est = RandomForestRegressor(criterion="poisson")
+    with pytest.raises(ValueError,
+                       match="The array.*contain a negative entry.*Poisson"):
+        est.fit(X, y)
