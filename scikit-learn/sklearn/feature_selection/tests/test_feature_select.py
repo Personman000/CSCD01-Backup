@@ -678,11 +678,9 @@ def test_unsupervised_model_fit(n_features_to_select):
     sfs.fit(X)
     assert(sfs.transform(X).shape[1] == n_features_to_select)
 
-
 @pytest.mark.parametrize('y', ('no_validation', 2j, 22.2, np.nan))
 def test_no_y_validation_model_fit(y):
-    # Test to see if y takes any invalid values
-
+    # Test to see if y(clusters) takes any invalid values
     X, clusters = make_blobs(n_features=6)
     sfs = SequentialFeatureSelector(
         KMeans(),
