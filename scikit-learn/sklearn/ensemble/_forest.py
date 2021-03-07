@@ -307,6 +307,11 @@ class BaseForest(MultiOutputMixin, BaseEnsemble, metaclass=ABCMeta):
         if sample_weight is not None:
             sample_weight = _check_sample_weight(sample_weight, X)
 
+        if (self.criterion == "poisson" and y is not None and np.any(y < 0)):
+            raise ValueError("The array of target training values (inputted y) "
+                              "contain a negative entry, which is invalid for "
+                              "the Poisson criterion.")
+        
         if issparse(X):
             # Pre-sort indices to avoid that each individual tree of the
             # ensemble sorts the indices.
@@ -1310,11 +1315,12 @@ class RandomForestRegressor(ForestRegressor):
            The default value of ``n_estimators`` changed from 10 to 100
            in 0.22.
 
-    criterion : {"mse", "mae"}, default="mse"
+    criterion : {"mse", "mae", "poisson"}, default="mse"
         The function to measure the quality of a split. Supported criteria
         are "mse" for the mean squared error, which is equal to variance
-        reduction as feature selection criterion, and "mae" for the mean
-        absolute error.
+        reduction as feature selection criterion, "mae" for the mean
+        absolute error, and "poisson" which uses reduction in Poisson deviance 
+        to find splits.
 
         .. versionadded:: 0.18
            Mean Absolute Error (MAE) criterion.
