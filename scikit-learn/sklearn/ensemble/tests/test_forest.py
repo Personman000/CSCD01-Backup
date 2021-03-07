@@ -165,37 +165,22 @@ def check_regression_criterion(name, criterion):
 
     reg = ForestRegressor(n_estimators=5, criterion=criterion,
                           random_state=1)
-
-    if (criterion == "poisson"):
-        y_reg_array = y_reg_non_neg
-        expected_score_no_max_features = 0.9
-        expected_score_max_features = 0.9
-    else:
-        y_reg_array = y_reg
-        expected_score_no_max_features = 0.93
-        expected_score_max_features = 0.92
-
-    reg.fit(X_reg, y_reg_array)
-    score = reg.score(X_reg, y_reg_array)
-    assert score > expected_score_no_max_features, (
-        "Failed with max_features=None, criterion %s "
-        "and score = %f" % (criterion, score))
+    reg.fit(X_reg, y_reg)
+    score = reg.score(X_reg, y_reg)
+    assert score > 0.93, ("Failed with max_features=None, criterion %s "
+                          "and score = %f" % (criterion, score))
 
     reg = ForestRegressor(n_estimators=5, criterion=criterion,
                           max_features=6, random_state=1)
-    reg.fit(X_reg, y_reg_array)
-    score = reg.score(X_reg, y_reg_array)
-    assert score > expected_score_max_features, (
-        "Failed with max_features=6, criterion %s "
-        "and score = %f" % (criterion, score))
+    reg.fit(X_reg, y_reg)
+    score = reg.score(X_reg, y_reg)
+    assert score > 0.92, ("Failed with max_features=6, criterion %s "
+                          "and score = %f" % (criterion, score))
 
 
 @pytest.mark.parametrize('name', FOREST_REGRESSORS)
-@pytest.mark.parametrize('criterion',
-                         ("mse", "mae", "friedman_mse", "poisson"))
+@pytest.mark.parametrize('criterion', ("mse", "mae", "friedman_mse"))
 def test_regression(name, criterion):
-    if (name != "RandomForestRegressor" and criterion == "poisson"):
-        pytest.skip("Poisson is available only for RandomForestRegressor")
     check_regression_criterion(name, criterion)
 
 
@@ -279,11 +264,9 @@ def check_importances(name, criterion, dtype, tolerance):
         itertools.chain(product(FOREST_CLASSIFIERS,
                                 ["gini", "entropy"]),
                         product(FOREST_REGRESSORS,
-                                ["mse", "friedman_mse", "mae", "poisson"])))
+                                ["mse", "friedman_mse", "mae"])))
 def test_importances(dtype, name, criterion):
     tolerance = 0.01
-    if (name != "RandomForestRegressor" and criterion == "poisson"):
-        pytest.skip("Poisson is available only for RandomForestRegressor")
     if name in FOREST_REGRESSORS and criterion == "mae":
         tolerance = 0.05
     check_importances(name, criterion, dtype, tolerance)
@@ -1517,7 +1500,35 @@ def test_n_features_deprecation(Estimator):
         est.n_features_
 
 
+def check_poisson_regression(name, criterion):
+    # Check consistency on regression dataset.
+    ForestRegressor = FOREST_REGRESSORS[name]
+
+    reg = ForestRegressor(n_estimators=5, criterion=criterion,
+                          random_state=1)
+    reg.fit(X_reg, y_reg_non_neg)
+    score = reg.score(X_reg, y_reg_non_neg)
+    assert score > 0.90, ("Failed with max_features=None, criterion %s "
+                          "and score = %f" % (criterion, score))
+
+    reg = ForestRegressor(n_estimators=5, criterion=criterion,
+                          max_features=6, random_state=1)
+    reg.fit(X_reg, y_reg_non_neg)
+    score = reg.score(X_reg, y_reg_non_neg)
+    assert score > 0.90, ("Failed with max_features=6, criterion %s "
+                          "and score = %f" % (criterion, score))
+
+
+@pytest.mark.parametrize('name', ("RandomForestRegressor"))
+@pytest.mark.parametrize('criterion', ("poisson"))
+def test_poisson_regression(name, criterion):
+    # Similar to test_regression function but uses y_reg_non_neg in the dataset
+    # Poisson requires tests with no negative values
+    check_poisson_regression(name, criterion)
+
+
 def test_random_forest_regressor_negative_value():
+    # Test RandomForestRegressor with negative y values
     X = np.array([1, 2, 5]).reshape(-1, 1)
     y = np.array([-3, 6, 2]).reshape(-1, 1)
     est = RandomForestRegressor(criterion="poisson")
