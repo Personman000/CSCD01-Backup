@@ -307,7 +307,7 @@ class BaseForest(MultiOutputMixin, BaseEnsemble, metaclass=ABCMeta):
         if sample_weight is not None:
             sample_weight = _check_sample_weight(sample_weight, X)
 
-        if (self.criterion == "poisson" and y is not None and np.any(y < 0)):
+        if (self.criterion == "poisson" and np.any(y < 0)):
             raise ValueError("The array of target training values (inputted y) "
                               "contain a negative entry, which is invalid for "
                               "the Poisson criterion.")
