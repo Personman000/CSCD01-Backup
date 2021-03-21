@@ -2578,10 +2578,7 @@ def train_test_val_split(*arrays,
         test = np.arange(n_train, n_train + n_test)
         val = np.arange(n_train + n_test, n_train + n_test + n_val)
 
-    # TODO: Below code won't work until the ShuffleSplit classes are changed to
-    # have the val_size parameter added
     else:
-        # TODO: Stratify NOT implemented
         if stratify is not None:
             CVClass = StratifiedShuffleSplit
         else:
