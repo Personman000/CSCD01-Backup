@@ -1390,9 +1390,8 @@ class BaseShuffleSplit(metaclass=ABCMeta):
             yield train, test
 
     def split_val(self, X, y=None, groups=None):
-        """Generate indices to split data into training and test set.
+        """Generate indices to split data into train, test and validation set.
 
-        TODO DOCUMENTATION
         Parameters
         ----------
         X : array-like of shape (n_samples, n_features)
