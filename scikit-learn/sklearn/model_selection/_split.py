@@ -2413,8 +2413,8 @@ def train_test_val_split(*arrays,
 
     n_samples = _num_samples(arrays[0])
     n_train, n_test, n_val = _validate_shuffle_split_val(n_samples,
-                                                         train_size,
                                                          test_size,
+                                                         train_size,
                                                          val_size,
                                                          default_test_size=0.2,
                                                          default_val_size=0.2)
