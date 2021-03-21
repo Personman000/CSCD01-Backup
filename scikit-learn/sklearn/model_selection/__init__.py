@@ -16,6 +16,7 @@ from ._split import GroupShuffleSplit
 from ._split import StratifiedShuffleSplit
 from ._split import PredefinedSplit
 from ._split import train_test_split
+from ._split import train_test_val_split
 from ._split import check_cv
 
 from ._validation import cross_val_score
@@ -66,4 +67,5 @@ __all__ = ['BaseCrossValidator',
            'learning_curve',
            'permutation_test_score',
            'train_test_split',
+           'train_test_val_split',
            'validation_curve']
