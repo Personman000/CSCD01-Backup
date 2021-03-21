@@ -1345,13 +1345,15 @@ class RepeatedStratifiedKFold(_RepeatedSplits):
 class BaseShuffleSplit(metaclass=ABCMeta):
     """Base class for ShuffleSplit and StratifiedShuffleSplit"""
     @_deprecate_positional_args
-    def __init__(self, n_splits=10, *, test_size=None, train_size=None,
-                 random_state=None):
+    def __init__(self, n_splits=10, *, val_size=None, test_size=None, 
+                 train_size=None, random_state=None):
         self.n_splits = n_splits
+        self.val_size = val_size
         self.test_size = test_size
         self.train_size = train_size
         self.random_state = random_state
         self._default_test_size = 0.1
+        self._default_val_size = 0
 
     def split(self, X, y=None, groups=None):
         """Generate indices to split data into training and test set.
@@ -1386,10 +1388,52 @@ class BaseShuffleSplit(metaclass=ABCMeta):
         X, y, groups = indexable(X, y, groups)
         for train, test in self._iter_indices(X, y, groups):
             yield train, test
+            
+    def split_val(self, X, y=None, groups=None):
+        """Generate indices to split data into training and test set.
+        
+        TODO DOCUMENTATION
+        Parameters
+        ----------
+        X : array-like of shape (n_samples, n_features)
+            Training data, where n_samples is the number of samples
+            and n_features is the number of features.
+
+        y : array-like of shape (n_samples,)
+            The target variable for supervised learning problems.
+
+        groups : array-like of shape (n_samples,), default=None
+            Group labels for the samples used while splitting the dataset into
+            train/test set.
+
+        Yields
+        ------
+        train : ndarray
+            The training set indices for that split.
+
+        test : ndarray
+            The testing set indices for that split.
+            
+        val: ndarray
+            The validation set indices for that split.
+
+        Notes
+        -----
+        Randomized CV splitters may return different results for each call of
+        split. You can make the results identical by setting `random_state`
+        to an integer.
+        """
+        X, y, groups = indexable(X, y, groups)
+        for train, test, val in self._iter_indices_val(X, y, groups):
+            yield train, test, val
 
     @abstractmethod
     def _iter_indices(self, X, y=None, groups=None):
         """Generate (train, test) indices"""
+        
+    @abstractmethod
+    def _iter_indices_val(self, X, y=None, groups=None):
+        """Generate (train, test, val) indices"""
 
     def get_n_splits(self, X=None, y=None, groups=None):
         """Returns the number of splitting iterations in the cross-validator
@@ -1477,6 +1521,8 @@ class ShuffleSplit(BaseShuffleSplit):
     TRAIN: [1 2 4] TEST: [3 5]
     TRAIN: [3 4 1] TEST: [5 2]
     TRAIN: [3 5 1] TEST: [2 4]
+    
+    TODO: Update or don't bother?
     """
     @_deprecate_positional_args
     def __init__(self, n_splits=10, *, test_size=None, train_size=None,
@@ -1487,6 +1533,7 @@ class ShuffleSplit(BaseShuffleSplit):
             train_size=train_size,
             random_state=random_state)
         self._default_test_size = 0.1
+        self._default_val_size = 0
 
     def _iter_indices(self, X, y=None, groups=None):
         n_samples = _num_samples(X)
@@ -1501,6 +1548,23 @@ class ShuffleSplit(BaseShuffleSplit):
             ind_test = permutation[:n_test]
             ind_train = permutation[n_test:(n_test + n_train)]
             yield ind_train, ind_test
+            
+    def _iter_indices_val(self, X, y=None, groups=None):
+        n_samples = _num_samples(X)
+        n_train, n_test, n_val = _validate_shuffle_split_val(
+            n_samples, self.val_size, self.test_size, self.train_size,
+            default_val_size=self._default_val_size,
+            default_test_size=self._default_test_size)
+
+        rng = check_random_state(self.random_state)
+        for i in range(self.n_splits):
+            # random partition
+            permutation = rng.permutation(n_samples)
+            ind_test = permutation[:n_test]
+            ind_train = permutation[n_test:(n_test + n_train)]
+            ind_val = permutation[(n_test + n_train):(n_test + n_train
+                                                             + n_val)]
+            yield ind_train, ind_test, ind_val
 
 
 class GroupShuffleSplit(ShuffleSplit):
@@ -2432,6 +2496,7 @@ def train_test_val_split(*arrays,
     # TODO: Below code won't work until the ShuffleSplit classes are changed to
     # have the val_size parameter added
     else:
+        # TODO: Stratify NOT implemented
         if stratify is not None:
             CVClass = StratifiedShuffleSplit
         else:
@@ -2442,7 +2507,7 @@ def train_test_val_split(*arrays,
                      val_size=n_val,
                      random_state=random_state)
 
-        train, test, val = next(cv.split(X=arrays[0], y=stratify))
+        train, test, val = next(cv.split_val(X=arrays[0], y=stratify))
 
     return list(chain.from_iterable((_safe_indexing(a, train),
                                      _safe_indexing(a, test),
