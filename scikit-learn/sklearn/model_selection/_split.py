@@ -2032,8 +2032,8 @@ def _validate_shuffle_split_val(n_samples, val_size, test_size, train_size,
     if (train_size_type == 'f' and test_size_type == 'f'
        and val_size_type == "f" and train_size + test_size + val_size > 1):
         raise ValueError(
-            'The sum of test_size, train_size and val_size = {}, should be'
-            'in the (0, 1) range. Reduce test_size and/or train_size and/or'
+            'The sum of test_size, train_size and val_size = {}, should be '
+            'in the (0, 1) range. Reduce test_size and/or train_size and/or '
             'val_size.'
             .format(train_size + test_size + val_size))
 
