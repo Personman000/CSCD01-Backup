@@ -2310,14 +2310,14 @@ def train_test_split(*arrays,
 # Use setattr to avoid mypy errors when monkeypatching.
 setattr(train_test_split, '__test__', False)
 
+
 def train_test_val_split(*arrays,
-                     val_size=None,
-                     test_size=None,
-                     train_size=None,
-                     val_size=None,
-                     random_state=None,
-                     shuffle=True,
-                     stratify=None):
+                         val_size=None,
+                         test_size=None,
+                         train_size=None,
+                         random_state=None,
+                         shuffle=True,
+                         stratify=None):
     """Split arrays or matrices into random train, test, and validation subsets
 
     Quick utility that wraps input validation and
@@ -2332,12 +2332,12 @@ def train_test_val_split(*arrays,
     *arrays : sequence of indexables with same length / shape[0]
         Allowed inputs are lists, numpy arrays, scipy-sparse
         matrices or pandas dataframes.
-        
+
     val_size : float or int, default=None
         If float, should be between 0.0 and 1.0 and represent the proportion
         of the dataset to include in the val split. If int, represents the
         absolute number of val samples. If None, the value is set to the
-        complement of the train size + test size. If ``test_size`` is also 
+        complement of the train size + test size. If ``test_size`` is also
         None, it will be set to 0.2. If ``train_size`` is also None, it will
         be set to 0.2, for a 60%, 20%, 20% split.
 
@@ -2345,14 +2345,15 @@ def train_test_val_split(*arrays,
         If float, should be between 0.0 and 1.0 and represent the proportion
         of the dataset to include in the test split. If int, represents the
         absolute number of test samples. If None, the value is set to the
-        complement of the train size. If ``train_size`` is also None, it will
-        be set to 0.25.
+        complement of the train size + validation size. If ``train_size`` is
+        also None, it will be set to 0.25.
 
     train_size : float or int, default=None
         If float, should be between 0.0 and 1.0 and represent the
         proportion of the dataset to include in the train split. If
         int, represents the absolute number of train samples. If None,
-        the value is automatically set to the complement of the test size.
+        the value is automatically set to the complement of the test size
+        + validation size.
 
     random_state : int, RandomState instance or None, default=None
         Controls the shuffling applied to the data before applying the split.
@@ -2397,7 +2398,7 @@ def train_test_val_split(*arrays,
            [8, 9]])
     >>> X_val
     array([[4, 5],
-           [0, 1]])       
+           [0, 1]])
     >>> y_train
     [3]
     >>> y_test
