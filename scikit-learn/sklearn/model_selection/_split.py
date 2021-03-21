@@ -2310,6 +2310,103 @@ def train_test_split(*arrays,
 # Use setattr to avoid mypy errors when monkeypatching.
 setattr(train_test_split, '__test__', False)
 
+def train_test_val_split(*arrays,
+                     val_size=None,
+                     test_size=None,
+                     train_size=None,
+                     val_size=None,
+                     random_state=None,
+                     shuffle=True,
+                     stratify=None):
+    """Split arrays or matrices into random train, test, and validation subsets
+
+    Quick utility that wraps input validation and
+    ``next(ShuffleSplit().split(X, y))`` and application to input data
+    into a single call for splitting (and optionally subsampling) data in a
+    oneliner.
+
+    Read more in the :ref:`User Guide <cross_validation>`.
+
+    Parameters
+    ----------
+    *arrays : sequence of indexables with same length / shape[0]
+        Allowed inputs are lists, numpy arrays, scipy-sparse
+        matrices or pandas dataframes.
+        
+    val_size : float or int, default=None
+        If float, should be between 0.0 and 1.0 and represent the proportion
+        of the dataset to include in the val split. If int, represents the
+        absolute number of val samples. If None, the value is set to the
+        complement of the train size + test size. If ``test_size`` is also 
+        None, it will be set to 0.2. If ``train_size`` is also None, it will
+        be set to 0.2, for a 60%, 20%, 20% split.
+
+    test_size : float or int, default=None
+        If float, should be between 0.0 and 1.0 and represent the proportion
+        of the dataset to include in the test split. If int, represents the
+        absolute number of test samples. If None, the value is set to the
+        complement of the train size. If ``train_size`` is also None, it will
+        be set to 0.25.
+
+    train_size : float or int, default=None
+        If float, should be between 0.0 and 1.0 and represent the
+        proportion of the dataset to include in the train split. If
+        int, represents the absolute number of train samples. If None,
+        the value is automatically set to the complement of the test size.
+
+    random_state : int, RandomState instance or None, default=None
+        Controls the shuffling applied to the data before applying the split.
+        Pass an int for reproducible output across multiple function calls.
+        See :term:`Glossary <random_state>`.
+
+
+    shuffle : bool, default=True
+        Whether or not to shuffle the data before splitting. If shuffle=False
+        then stratify must be None.
+
+    stratify : array-like, default=None
+        If not None, data is split in a stratified fashion, using this as
+        the class labels.
+        Read more in the :ref:`User Guide <stratification>`.
+
+    Returns
+    -------
+    splitting : list, length=2 * len(arrays)
+        List containing train-test-val split of inputs.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from sklearn.model_selection import train_test_split
+    >>> X, y = np.arange(10).reshape((5, 2)), range(5)
+    >>> X
+    array([[0, 1],
+           [2, 3],
+           [4, 5],
+           [6, 7],
+           [8, 9]])
+    >>> list(y)
+    [0, 1, 2, 3, 4]
+    >>> X_train, X_test, X_val, y_train, y_test, y_val = train_test_val_split(
+    ...     X, y, val_size=0.49, test_size=0.33, random_state=42)
+    ...
+    >>> X_train
+    array([[6, 7]])
+    >>> X_test
+    array([[2, 3],
+           [8, 9]])
+    >>> X_val
+    array([[4, 5],
+           [0, 1]])       
+    >>> y_train
+    [3]
+    >>> y_test
+    [1, 4]
+    >>> y_val
+    [2, 0]
+    """
+    return None
+
 
 def _build_repr(self):
     # XXX This is copied from BaseEstimator's get_params
