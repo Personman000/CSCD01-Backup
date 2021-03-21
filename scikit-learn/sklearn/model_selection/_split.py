@@ -2481,7 +2481,6 @@ def train_test_val_split(*arrays,
                                                          val_size,
                                                          test_size,
                                                          train_size,
-                                                         val_size,
                                                          default_val_size=0.2,
                                                          default_test_size=0.2)
 
