@@ -1525,10 +1525,11 @@ class ShuffleSplit(BaseShuffleSplit):
     TODO: Update or don't bother?
     """
     @_deprecate_positional_args
-    def __init__(self, n_splits=10, *, test_size=None, train_size=None,
+    def __init__(self, n_splits=10, *, val_size=None, test_size=None, train_size=None,
                  random_state=None):
         super().__init__(
             n_splits=n_splits,
+            val_size=val_size,
             test_size=test_size,
             train_size=train_size,
             random_state=random_state)
