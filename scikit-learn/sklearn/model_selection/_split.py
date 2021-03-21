@@ -1800,9 +1800,11 @@ def _validate_shuffle_split_val(n_samples, test_size, train_size, val_size,
     Validation helper to check if the train/test/val sizes are meaningful wrt
     to the size of the data (n_samples)
     """
-    # TODO: Not sure how to adapt this
-    # if test_size is None and train_size is None:
-    #     test_size = default_test_size
+    if train_size is None:
+        if test_size is None:
+            test_size = default_test_size
+        if val_size is None:
+            val_size = default_val_size
 
     test_size_type = np.asarray(test_size).dtype.kind
     train_size_type = np.asarray(train_size).dtype.kind
