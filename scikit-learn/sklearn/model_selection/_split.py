@@ -1698,7 +1698,7 @@ class GroupShuffleSplit(ShuffleSplit):
 class StratifiedShuffleSplit(BaseShuffleSplit):
     """Stratified ShuffleSplit cross-validator
 
-    Provides train/test indices to split data in train/test sets.
+    Provides train/test indices to split data in train/test/validation sets.
 
     This cross-validation object is a merge of StratifiedKFold and
     ShuffleSplit, which returns stratified randomized folds. The folds
@@ -1714,6 +1714,13 @@ class StratifiedShuffleSplit(BaseShuffleSplit):
     ----------
     n_splits : int, default=10
         Number of re-shuffling & splitting iterations.
+
+    val_size : float or int, default=None
+        If float, should be between 0.0 and 1.0 and represent the
+        proportion of the dataset to include in the validation split. If
+        int, represents the absolute number of validation samples. If None,
+        the value is automatically set to the complement of the test and
+        train size.
 
     test_size : float or int, default=None
         If float, should be between 0.0 and 1.0 and represent the proportion
