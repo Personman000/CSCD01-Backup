@@ -1462,7 +1462,7 @@ class BaseShuffleSplit(metaclass=ABCMeta):
 class ShuffleSplit(BaseShuffleSplit):
     """Random permutation cross-validator
 
-    Yields indices to split data into training and test sets.
+    Yields indices to split data into training, test and validation sets.
 
     Note: contrary to other cross-validation strategies, random splits
     do not guarantee that all folds will be different, although this is
@@ -1474,6 +1474,13 @@ class ShuffleSplit(BaseShuffleSplit):
     ----------
     n_splits : int, default=10
         Number of re-shuffling & splitting iterations.
+
+    val_size : float or int, default=None
+        If float, should be between 0.0 and 1.0 and represent the
+        proportion of the dataset to include in the validation split. If
+        int, represents the absolute number of validation samples. If None,
+        the value is automatically set to the complement of the test and
+        train size.
 
     test_size : float or int, default=None
         If float, should be between 0.0 and 1.0 and represent the proportion
@@ -1520,8 +1527,6 @@ class ShuffleSplit(BaseShuffleSplit):
     TRAIN: [1 2 4] TEST: [3 5]
     TRAIN: [3 4 1] TEST: [5 2]
     TRAIN: [3 5 1] TEST: [2 4]
-
-    TODO: Update or don't bother?
     """
     @_deprecate_positional_args
     def __init__(self, n_splits=10, *, val_size=None, test_size=None,
