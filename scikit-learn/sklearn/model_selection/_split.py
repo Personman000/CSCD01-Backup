@@ -1345,7 +1345,7 @@ class RepeatedStratifiedKFold(_RepeatedSplits):
 class BaseShuffleSplit(metaclass=ABCMeta):
     """Base class for ShuffleSplit and StratifiedShuffleSplit"""
     @_deprecate_positional_args
-    def __init__(self, n_splits=10, *, val_size=None, test_size=None, 
+    def __init__(self, n_splits=10, *, val_size=None, test_size=None,
                  train_size=None, random_state=None):
         self.n_splits = n_splits
         self.val_size = val_size
@@ -1388,10 +1388,10 @@ class BaseShuffleSplit(metaclass=ABCMeta):
         X, y, groups = indexable(X, y, groups)
         for train, test in self._iter_indices(X, y, groups):
             yield train, test
-            
+
     def split_val(self, X, y=None, groups=None):
         """Generate indices to split data into training and test set.
-        
+
         TODO DOCUMENTATION
         Parameters
         ----------
@@ -1413,7 +1413,7 @@ class BaseShuffleSplit(metaclass=ABCMeta):
 
         test : ndarray
             The testing set indices for that split.
-            
+
         val: ndarray
             The validation set indices for that split.
 
@@ -1430,7 +1430,7 @@ class BaseShuffleSplit(metaclass=ABCMeta):
     @abstractmethod
     def _iter_indices(self, X, y=None, groups=None):
         """Generate (train, test) indices"""
-        
+
     @abstractmethod
     def _iter_indices_val(self, X, y=None, groups=None):
         """Generate (train, test, val) indices"""
@@ -1521,12 +1521,12 @@ class ShuffleSplit(BaseShuffleSplit):
     TRAIN: [1 2 4] TEST: [3 5]
     TRAIN: [3 4 1] TEST: [5 2]
     TRAIN: [3 5 1] TEST: [2 4]
-    
+
     TODO: Update or don't bother?
     """
     @_deprecate_positional_args
-    def __init__(self, n_splits=10, *, val_size=None, test_size=None, train_size=None,
-                 random_state=None):
+    def __init__(self, n_splits=10, *, val_size=None, test_size=None,
+                 train_size=None, random_state=None):
         super().__init__(
             n_splits=n_splits,
             val_size=val_size,
@@ -1549,7 +1549,7 @@ class ShuffleSplit(BaseShuffleSplit):
             ind_test = permutation[:n_test]
             ind_train = permutation[n_test:(n_test + n_train)]
             yield ind_train, ind_test
-            
+
     def _iter_indices_val(self, X, y=None, groups=None):
         n_samples = _num_samples(X)
         n_train, n_test, n_val = _validate_shuffle_split_val(
