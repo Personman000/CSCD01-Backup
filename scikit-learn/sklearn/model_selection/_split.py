@@ -1794,6 +1794,109 @@ class StratifiedShuffleSplit(BaseShuffleSplit):
         return super().split(X, y, groups)
 
 
+def _validate_shuffle_split_val(n_samples, test_size, train_size, val_size,
+                                default_test_size=None, default_val_size=None):
+    """
+    Validation helper to check if the train/test/val sizes are meaningful wrt
+    to the size of the data (n_samples)
+    """
+    # TODO: Not sure how to adapt this
+    # if test_size is None and train_size is None:
+    #     test_size = default_test_size
+
+    test_size_type = np.asarray(test_size).dtype.kind
+    train_size_type = np.asarray(train_size).dtype.kind
+    val_size_type = np.asarray(val_size).dtype.kind
+
+    if (test_size_type == 'i' and (test_size >= n_samples or test_size <= 0)
+       or test_size_type == 'f' and (test_size <= 0 or test_size >= 1)):
+        raise ValueError('test_size={0} should be either positive and smaller'
+                         ' than the number of samples {1} or a float in the '
+                         '(0, 1) range'.format(test_size, n_samples))
+
+    if (train_size_type == 'i' and (train_size >= n_samples or train_size <= 0)
+       or train_size_type == 'f' and (train_size <= 0 or train_size >= 1)):
+        raise ValueError('train_size={0} should be either positive and smaller'
+                         ' than the number of samples {1} or a float in the '
+                         '(0, 1) range'.format(train_size, n_samples))
+
+    if (val_size_type == 'i' and (val_size >= n_samples or val_size <= 0)
+       or val_size_type == 'f' and (val_size <= 0 or val_size >= 1)):
+        raise ValueError('val_size={0} should be either positive and smaller'
+                         ' than the number of samples {1} or a float in the '
+                         '(0, 1) range'.format(val_size, n_samples))
+
+    if train_size is not None and train_size_type not in ('i', 'f'):
+        raise ValueError("Invalid value for train_size: {}".format(train_size))
+    if test_size is not None and test_size_type not in ('i', 'f'):
+        raise ValueError("Invalid value for test_size: {}".format(test_size))
+    if val_size is not None and val_size_type not in ('i', 'f'):
+        raise ValueError("Invalid value for val_size: {}".format(val_size))
+
+    if (train_size_type == 'f' and test_size_type == 'f'
+       and val_size_type == "f" and train_size + test_size + val_size > 1):
+        raise ValueError(
+            'The sum of test_size, train_size and val_size = {}, should be'
+            'in the (0, 1) range. Reduce test_size and/or train_size and/or'
+            'val_size.'
+            .format(train_size + test_size + val_size))
+
+    if test_size_type == 'f':
+        n_test = ceil(test_size * n_samples)
+    elif test_size_type == 'i':
+        n_test = float(test_size)
+
+    if train_size_type == 'f':
+        n_train = floor(train_size * n_samples)
+    elif train_size_type == 'i':
+        n_train = float(train_size)
+
+    if val_size_type == 'f':
+        n_val = floor(val_size * n_samples)
+    elif val_size_type == 'i':
+        n_val = float(val_size)
+
+    if train_size is None:
+        n_train = n_samples - n_test - n_val
+    elif test_size is None:
+        n_test = n_samples - n_train - n_val
+    elif val_size is None:
+        n_val = n_samples - n_test - n_train
+
+    if n_train + n_test + n_val > n_samples:
+        raise ValueError('The sum of train_size, test_size and val_size = %d, '
+                         'should be smaller than the number of '
+                         'samples %d. Reduce test_size and/or '
+                         'train_size and/or val_size.'
+                         % (n_train + n_test + n_val, n_samples))
+
+    n_train, n_test, n_val = int(n_train), int(n_test), int(n_val)
+
+    if n_train == 0:
+        raise ValueError(
+            'With n_samples={}, test_size={}, train_size={} and val_size={},'
+            ' the resulting train set will be empty. Adjust any of the '
+            'aforementioned parameters.'.format(n_samples, test_size, val_size,
+                                                train_size)
+        )
+    if n_test == 0:
+        raise ValueError(
+            'With n_samples={}, test_size={}, train_size={} and val_size={},'
+            ' the resulting test set will be empty. Adjust any of the '
+            'aforementioned parameters.'.format(n_samples, test_size, val_size,
+                                                train_size)
+        )
+    if n_val == 0:
+        raise ValueError(
+            'With n_samples={}, test_size={}, train_size={} and val_size={},'
+            ' the resulting validation set will be empty. Adjust any of the '
+            'aforementioned parameters.'.format(n_samples, test_size, val_size,
+                                                train_size)
+        )
+
+    return n_train, n_test, n_val
+
+
 def _validate_shuffle_split(n_samples, test_size, train_size,
                             default_test_size=None):
     """
