@@ -2360,7 +2360,6 @@ def train_test_val_split(*arrays,
         Pass an int for reproducible output across multiple function calls.
         See :term:`Glossary <random_state>`.
 
-
     shuffle : bool, default=True
         Whether or not to shuffle the data before splitting. If shuffle=False
         then stratify must be None.
@@ -2406,7 +2405,48 @@ def train_test_val_split(*arrays,
     >>> y_val
     [2, 0]
     """
-    return None
+    n_arrays = len(arrays)
+    if n_arrays == 0:
+        raise ValueError("At least one array required as input")
+
+    arrays = indexable(*arrays)
+
+    n_samples = _num_samples(arrays[0])
+    n_train, n_test, n_val = _validate_shuffle_split_val(n_samples,
+                                                         train_size,
+                                                         test_size,
+                                                         val_size,
+                                                         default_test_size=0.2,
+                                                         default_val_size=0.2)
+
+    if shuffle is False:
+        if stratify is not None:
+            raise ValueError(
+                "Stratified train/test/val split is not implemented for "
+                "shuffle=False")
+
+        train = np.arange(n_train)
+        test = np.arange(n_train, n_train + n_test)
+        val = np.arange(n_train + n_test, n_train + n_test + n_val)
+
+    # TODO: Below code won't work until the ShuffleSplit classes are changed to
+    # have the val_size parameter added
+    else:
+        if stratify is not None:
+            CVClass = StratifiedShuffleSplit
+        else:
+            CVClass = ShuffleSplit
+
+        cv = CVClass(test_size=n_test,
+                     train_size=n_train,
+                     val_size=n_val,
+                     random_state=random_state)
+
+        train, test, val = next(cv.split(X=arrays[0], y=stratify))
+
+    return list(chain.from_iterable((_safe_indexing(a, train),
+                                     _safe_indexing(a, test),
+                                     _safe_indexing(a, val)) for a in arrays))
 
 
 def _build_repr(self):
