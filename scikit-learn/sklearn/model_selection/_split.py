@@ -1751,14 +1751,16 @@ class StratifiedShuffleSplit(BaseShuffleSplit):
     TRAIN: [0 5 1] TEST: [3 4 2]
     """
     @_deprecate_positional_args
-    def __init__(self, n_splits=10, *, test_size=None, train_size=None,
-                 random_state=None):
+    def __init__(self, n_splits=10, *, val_size=None, test_size=None,
+                 train_size=None, random_state=None):
         super().__init__(
             n_splits=n_splits,
+            val_size=val_size,
             test_size=test_size,
             train_size=train_size,
             random_state=random_state)
         self._default_test_size = 0.1
+        self._default_val_size = 0
 
     def _iter_indices(self, X, y, groups=None):
         n_samples = _num_samples(X)
@@ -1821,6 +1823,81 @@ class StratifiedShuffleSplit(BaseShuffleSplit):
 
             yield train, test
 
+    def _iter_indices_val(self, X, y=None, groups=None):
+        n_samples = _num_samples(X)
+        y = check_array(y, ensure_2d=False, dtype=None)
+        n_train, n_test, n_val = _validate_shuffle_split_val(
+            n_samples, self.val_size, self.test_size, self.train_size,
+            default_test_size=self._default_test_size,
+            default_val_size=self._default_val_size)
+
+        if y.ndim == 2:
+            # for multi-label y, map each distinct row to a string repr
+            # using join because str(row) uses an ellipsis if len(row) > 1000
+            y = np.array([' '.join(row.astype('str')) for row in y])
+
+        classes, y_indices = np.unique(y, return_inverse=True)
+        n_classes = classes.shape[0]
+
+        class_counts = np.bincount(y_indices)
+        if np.min(class_counts) < 2:
+            raise ValueError("The least populated class in y has only 1"
+                             " member, which is too few. The minimum"
+                             " number of groups for any class cannot"
+                             " be less than 2.")
+
+        if n_train < n_classes:
+            raise ValueError('The train_size = %d should be greater or '
+                             'equal to the number of classes = %d' %
+                             (n_train, n_classes))
+        if n_test < n_classes:
+            raise ValueError('The test_size = %d should be greater or '
+                             'equal to the number of classes = %d' %
+                             (n_test, n_classes))
+
+        if n_val < n_classes:
+            raise ValueError('The val_size = %d should be greater or '
+                             'equal to the number of classes = %d' %
+                             (n_val, n_classes))
+
+        # Find the sorted list of instances for each class:
+        # (np.unique above performs a sort, so code is O(n logn) already)
+        class_indices = np.split(np.argsort(y_indices, kind='mergesort'),
+                                 np.cumsum(class_counts)[:-1])
+
+        rng = check_random_state(self.random_state)
+
+        for _ in range(self.n_splits):
+            # if there are ties in the class-counts, we want
+            # to make sure to break them anew in each iteration
+            n_i = _approximate_mode(class_counts, n_train, rng)
+            class_counts_remaining = class_counts - n_i
+            t_i = _approximate_mode(class_counts_remaining, n_test, rng)
+            class_counts_remaining = class_counts - n_i - t_i
+            v_i = _approximate_mode(class_counts_remaining, n_val, rng)
+
+            train = []
+            test = []
+            val = []
+
+            for i in range(n_classes):
+                permutation = rng.permutation(class_counts[i])
+                perm_indices_class_i = class_indices[i].take(permutation,
+                                                             mode='clip')
+
+                train.extend(perm_indices_class_i[:n_i[i]])
+                test.extend(perm_indices_class_i[n_i[i]:n_i[i] + t_i[i]])
+                val.extend(
+                    perm_indices_class_i[
+                        n_i[i] + t_i[i]:n_i[i] + t_i[i] + v_i[i]
+                    ])
+
+            train = rng.permutation(train)
+            test = rng.permutation(test)
+            val = rng.permutation(val)
+
+            yield train, test, val
+
     def split(self, X, y, groups=None):
         """Generate indices to split data into training and test set.
 
@@ -1857,6 +1934,13 @@ class StratifiedShuffleSplit(BaseShuffleSplit):
         """
         y = check_array(y, ensure_2d=False, dtype=None)
         return super().split(X, y, groups)
+
+    def split_val(self, X, y, groups=None):
+        """
+        TODO: Documentation
+        """
+        y = check_array(y, ensure_2d=False, dtype=None)
+        return super().split_val(X, y, groups)
 
 
 def _validate_shuffle_split_val(n_samples, val_size, test_size, train_size,
