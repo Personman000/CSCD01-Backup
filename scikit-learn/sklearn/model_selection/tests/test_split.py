@@ -34,6 +34,7 @@ from sklearn.model_selection import StratifiedShuffleSplit
 from sklearn.model_selection import PredefinedSplit
 from sklearn.model_selection import check_cv
 from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_val_split
 from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import RepeatedKFold
 from sklearn.model_selection import RepeatedStratifiedKFold
@@ -83,6 +84,8 @@ def test_cross_validator_with_default_params():
     ss = ShuffleSplit(random_state=0)
     ps = PredefinedSplit([1, 1, 2, 2])  # n_splits = np of unique folds = 2
 
+    ss_name = "ShuffleSplit"
+
     loo_repr = "LeaveOneOut()"
     lpo_repr = "LeavePOut(p=2)"
     kf_repr = "KFold(n_splits=2, random_state=None, shuffle=False)"
@@ -90,7 +93,8 @@ def test_cross_validator_with_default_params():
     lolo_repr = "LeaveOneGroupOut()"
     lopo_repr = "LeavePGroupsOut(n_groups=2)"
     ss_repr = ("ShuffleSplit(n_splits=10, random_state=0, "
-               "test_size=None, train_size=None)")
+               "test_size=None, train_size=None,"
+               "\n       val_size=None)")
     ps_repr = "PredefinedSplit(test_fold=array([1, 1, 2, 2]))"
 
     n_splits_expected = [n_samples, comb(n_samples, p), n_splits, n_splits,
@@ -1657,3 +1661,206 @@ def test_random_state_shuffle_false(Klass):
 ])
 def test_yields_constant_splits(cv, expected):
     assert _yields_constant_splits(cv) == expected
+
+def test_train_test_val_split_errors():
+    pytest.raises(ValueError, train_test_val_split)
+
+    pytest.raises(ValueError, train_test_val_split, range(3), train_size=1.1)
+
+    pytest.raises(ValueError, train_test_val_split, range(3), test_size=0.6,
+                  train_size=0.6)
+    pytest.raises(ValueError, train_test_val_split, range(3),
+                  test_size=np.float32(0.6), train_size=np.float32(0.6))
+    pytest.raises(ValueError, train_test_val_split, range(3), test_size=0.4,
+                  train_size=0.4, val_size=0.4)
+    pytest.raises(ValueError, train_test_val_split, range(3),
+                  test_size=np.float32(0.4), train_size=np.float32(0.4),
+                  val_size=np.float32(0.4))
+    pytest.raises(ValueError, train_test_val_split, range(3),
+                  test_size="wrong_type")
+    pytest.raises(ValueError, train_test_val_split, range(3), train_size=4)
+    pytest.raises(ValueError, train_test_val_split, range(3), test_size=1,
+                  train_size=3)
+    pytest.raises(ValueError, train_test_val_split, range(3), test_size=1,
+                  train_size=1, val_size=2)
+    pytest.raises(TypeError, train_test_val_split, range(3),
+                  some_argument=1.1)
+    pytest.raises(ValueError, train_test_val_split, range(3), range(42))
+    pytest.raises(ValueError, train_test_val_split, range(10),
+                  shuffle=False, stratify=True)
+
+    with pytest.raises(ValueError,
+                       match=r'train_size=11 should be either positive and '
+                             r'smaller than the number of samples 10 or a '
+                             r'float in the \(0, 1\) range'):
+        train_test_val_split(range(10), train_size=11, test_size=1, val_size=1)
+
+@pytest.mark.parametrize("train_size,test_size,val_size", [
+    (1.2, 0.8, 0.1),
+    (1., 0.8, 0.1),
+    (0.0, 0.8, 0.1),
+    (-.2, 0.8, 0.1),
+    (0.8, 1.2, 0.1),
+    (0.8, 1., 0.1),
+    (0.8, 0., 0.1),
+    (0.8, -.2, 0.1),
+    (0.8, 0.1, 1.2),
+    (0.8, 0.1, 0.0),
+    (0.8, 0.1, -.2),
+    (0.1, 0.4, 0.6)])
+def test_train_test_val_split_invalid_sizes1(train_size, test_size, val_size):
+    with pytest.raises(ValueError,
+                       match=r'should be .*in the \(0, 1\) range'):
+        train_test_val_split(range(10), train_size=train_size, test_size=test_size,
+            val_size=val_size)
+
+@pytest.mark.parametrize("train_size,test_size,val_size", [
+    (-10, 0.8, 0.1),
+    (0, 0.8, 0.1),
+    (11, 0.8, 0.1),
+    (0.8, -10, 0.1),
+    (0.8, 0, 0.1),
+    (0.8, 11, 0.1),
+    (0.1, 0.8, -10),
+    (0.1, 0.8, 0),
+    (0.1, 0.8, 11)])
+def test_train_test_val_split_invalid_sizes2(train_size, test_size, val_size):
+    with pytest.raises(ValueError,
+                       match=r'should be either positive and smaller'):
+        train_test_val_split(range(10), train_size=train_size, test_size=test_size,
+            val_size=val_size)
+
+@pytest.mark.parametrize("train_size, test_size, val_size, exp_train, exp_test, exp_val",
+                         [(None, None, None, 6, 2, 2),
+                          (4, 1, None, 4, 1, 5),
+                          (0.4, 1, None, 4, 1, 5),
+                          (None, None, 5, 3, 2, 5),
+                          (None, 5, None, 3, 5, 2),
+                          (None, 5, 4, 1, 5, 4)])
+def test_train_test_val_split_default_test_size(train_size, test_size, val_size,
+                                                    exp_train, exp_test, exp_val):
+    # Check that the default value has the expected behavior, i.e. complement
+    # train_size unless both are specified.
+    X = [[4,5],[8,7],[2,5],[9,6],[5,4],[1,2],[5,9],[8,7],[6,5],[4,3]]
+    X_train, X_test, X_val = train_test_val_split(X, train_size=train_size,
+                                                    test_size=test_size, val_size=val_size)
+
+    assert len(X_train) == exp_train
+    assert len(X_test) == exp_test
+    assert len(X_val) == exp_val
+
+def test_train_test_val_split():
+    X = np.arange(100).reshape((10,10))
+    X_s = coo_matrix(X)
+    y = np.arange(10)
+
+    # simple test
+    split = train_test_val_split(X, y, test_size=.3, train_size=.3, val_size=.3)
+    X_train, X_test, X_val, y_train, y_test, y_val = split
+    assert len(y_train) == len(y_test)
+    assert len(y_train) == len(y_val)
+    assert len(y_test) == len(y_val)
+    # test correspondence of X and y
+    assert_array_equal(X_train[:, 0], y_train * 10)
+    assert_array_equal(X_test[:, 0], y_test * 10)
+    assert_array_equal(X_val[:, 0], y_val * 10)
+
+    # don't convert lists to anything else by default
+    split = train_test_val_split(X, X_s, y.tolist())
+    X_train, X_test, X_val, X_s_train, X_s_test, X_s_val, y_train, y_test, y_val = split
+    assert isinstance(y_train, list)
+    assert isinstance(y_test, list)
+    assert isinstance(y_val, list)
+
+    # allow nd-arrays
+    X_4d = np.arange(10 * 5 * 3 * 2).reshape(10, 5, 3, 2)
+    y_3d = np.arange(10 * 7 * 11).reshape(10, 7, 11)
+    split = train_test_val_split(X_4d, y_3d)
+    assert split[0].shape == (6, 5, 3, 2)
+    assert split[1].shape == (2, 5, 3, 2)
+    assert split[2].shape == (2, 5, 3, 2)
+    assert split[3].shape == (6, 7, 11)
+    assert split[4].shape == (2, 7, 11)
+    assert split[5].shape == (2, 7, 11)
+
+    # test stratification option
+    ##
+
+    # test unshuffled split
+    y = np.arange(10)
+    for test_size in [2, 0.2]:
+        train, test, val = train_test_val_split(y, shuffle=False, test_size=test_size)
+        assert_array_equal(train, [0, 1, 2, 3, 4, 5])
+        assert_array_equal(test, [6, 7])
+        assert_array_equal(val, [8, 9])
+
+@ignore_warnings
+def test_train_test_val_split_pandas():
+    # check train_test_val_split doesn't destroy pandas dataframe
+    types = [MockDataFrame]
+    try:
+        from pandas import DataFrame
+        types.append(DataFrame)
+    except ImportError:
+        pass
+    for InputFeatureType in types:
+        # X dataframe
+        X_df = InputFeatureType(X)
+        X_train, X_test, X_val = train_test_val_split(X_df)
+        assert isinstance(X_train, InputFeatureType)
+        assert isinstance(X_test, InputFeatureType)
+        assert isinstance(X_val, InputFeatureType)
+
+def test_train_test_val_split_sparse():
+    # check that train_test_val_split converts scipy sparse matrices
+    # to csr, as stated in the documentation
+    X = np.arange(100).reshape((10, 10))
+    sparse_types = [csr_matrix, csc_matrix, coo_matrix]
+    for InputFeatureType in sparse_types:
+        X_s = InputFeatureType(X)
+        X_train, X_test, X_val = train_test_val_split(X_s)
+        assert isinstance(X_train, csr_matrix)
+        assert isinstance(X_test, csr_matrix)
+        assert isinstance(X_val, csr_matrix)
+
+def test_train_test_val_split_mock_pandas():
+    # X mock dataframe
+    X_df = MockDataFrame(X)
+    X_train, X_test, X_val = train_test_val_split(X_df)
+    assert isinstance(X_train, MockDataFrame)
+    assert isinstance(X_test, MockDataFrame)
+    assert isinstance(X_val, MockDataFrame)
+    X_train_arr, X_test_arr, X_val_arr = train_test_val_split(X_df)
+
+def test_train_test_val_split_list_input():
+    # Check that when y is a list / list of string labels, it works.
+    X = np.ones(17)
+    y1 = ['1'] * 10 + ['0'] * 7
+    y2 = np.hstack((np.ones(10), np.zeros(7)))
+    y3 = y2.tolist()
+
+    for stratify in (True, False):
+        X_train1, X_test1, X_val1, y_train1, y_test1, y_val1 = train_test_val_split(
+            X, y1, stratify=y1 if stratify else None, random_state=0)
+        X_train2, X_test2, X_val2, y_train2, y_test2, y_val2 = train_test_val_split(
+            X, y2, stratify=y2 if stratify else None, random_state=0)
+        X_train3, X_test3, X_val3, y_train3, y_test3, y_val3 = train_test_val_split(
+            X, y3, stratify=y3 if stratify else None, random_state=0)
+
+        # X values
+        np.testing.assert_equal(X_train1, X_train2)
+        np.testing.assert_equal(X_train1, X_train3)
+        np.testing.assert_equal(X_train2, X_train3)
+        
+        np.testing.assert_equal(X_test1, X_test2)
+        np.testing.assert_equal(X_test1, X_test3)
+        np.testing.assert_equal(X_test2, X_test3)
+
+        np.testing.assert_equal(X_val1, X_val2)
+        np.testing.assert_equal(X_val1, X_val3)
+        np.testing.assert_equal(X_val2, X_val3)
+
+        # y values
+        np.testing.assert_equal(y_train2, y_train3)
+        np.testing.assert_equal(y_test2, y_test3)
+        np.testing.assert_equal(y_val2, y_val3)
