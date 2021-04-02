@@ -199,7 +199,7 @@ class BaseHistGradientBoosting(BaseEstimator, ABC):
         acc_compute_hist_time = 0.  # time spent computing histograms
         # time spent predicting X for gradient and hessians update
         acc_prediction_time = 0.
-        X, y = self._validate_data(X, y, dtype=[X_DTYPE],
+        X, y = self._validate_data(X, y, accept_sparse='csr', dtype=[X_DTYPE],
                                    force_all_finite=False)
         y = self._encode_y(y)
         check_consistent_length(X, y)

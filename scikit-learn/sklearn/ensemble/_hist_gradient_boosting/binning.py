@@ -8,6 +8,8 @@ approximately the same number of samples.
 # Author: Nicolas Hug
 
 import numpy as np
+import scipy
+from scipy.sparse import csr_matrix
 
 from ...utils import check_random_state, check_array
 from ...base import BaseEstimator, TransformerMixin
@@ -40,11 +42,18 @@ def _find_binning_thresholds(col_data, max_bins):
         bining_thresholds[i - 1] < x <= binning_thresholds[i]
     """
     # ignore missing values when computing bin thresholds
-    missing_mask = np.isnan(col_data)
-    if missing_mask.any():
+    #missing_mask = np.isnan(col_data)
+    missing_mask = csr_matrix(col_data.shape)
+    for i in range(col_data.shape[0]):
+        if np.isnan(col_data[i,0]):
+            missing_mask[i,0]=1
+
+    #if missing_mask.any():
+    if missing_mask.toarray().any():
         col_data = col_data[~missing_mask]
-    col_data = np.ascontiguousarray(col_data, dtype=X_DTYPE)
-    distinct_values = np.unique(col_data)
+    #col_data = np.ascontiguousarray(col_data, dtype=X_DTYPE)
+    #distinct_values = np.unique(col_data)
+    distinct_values = np.union1d(np.unique(col_data.data), [0] if 0 in col_data else [])
     if len(distinct_values) <= max_bins:
         midpoints = distinct_values[:-1] + distinct_values[1:]
         midpoints *= .5
@@ -65,6 +74,52 @@ def _find_binning_thresholds(col_data, max_bins):
     np.clip(midpoints, a_min=None, a_max=ALMOST_INF, out=midpoints)
     return midpoints
 
+#---------------------------------------------------------------------------------------------------------
+def _map_to_bins_sparse(data, binning_thresholds, missing_values_bin_idx, binned):
+    """Bin continuous and categorical values to discrete integer-coded levels.
+
+    A given value x is mapped into bin value i iff
+    thresholds[i - 1] < x <= thresholds[i]
+
+    Parameters
+    ----------
+    data : ndarray, shape (n_samples, n_features)
+        The data to bin.
+    binning_thresholds : list of arrays
+        For each feature, stores the increasing numeric values that are
+        used to separate the bins.
+    binned : ndarray, shape (n_samples, n_features)
+        Output array, must be fortran aligned.
+    """
+    for feature_idx in range(data.shape[1]):
+        binned[:, feature_idx] = _map_col_to_bins_sparse(data[:, feature_idx],
+                                binning_thresholds[feature_idx],
+                                missing_values_bin_idx,
+                                binned[:, feature_idx])
+
+    return binned
+
+
+def _map_col_to_bins_sparse(data, binning_thresholds, missing_values_bin_idx, binned):
+    """Binary search to find the bin index for each value in the data."""
+    for i in range(data.shape[0]):
+
+        if np.isnan(data[i,0]):
+            binned[i,0] = missing_values_bin_idx
+        else:
+            # for known values, use binary search
+            left, right = 0, binning_thresholds.shape[0]
+            while left < right:
+                # equal to (right + left - 1) // 2 but avoids overflow
+                middle = left + (right - left - 1) // 2
+                if data[i,0] <= binning_thresholds[middle]:
+                    right = middle
+                else:
+                    left = middle + 1
+            if(left != 0):
+                binned[i] = left
+    return binned
+#---------------------------------------------------------------------------------------------------------
 
 class _BinMapper(TransformerMixin, BaseEstimator):
     """Transformer that maps a dataset into integer-valued bins.
@@ -172,7 +227,7 @@ class _BinMapper(TransformerMixin, BaseEstimator):
             raise ValueError('n_bins={} should be no smaller than 3 '
                              'and no larger than 256.'.format(self.n_bins))
 
-        X = check_array(X, dtype=[X_DTYPE], force_all_finite=False)
+        X = check_array(X,  accept_sparse='csr', dtype=[X_DTYPE], force_all_finite=False)
         max_bins = self.n_bins - 1
 
         rng = check_random_state(self.random_state)
@@ -181,7 +236,8 @@ class _BinMapper(TransformerMixin, BaseEstimator):
             X = X.take(subset, axis=0)
 
         if self.is_categorical is None:
-            self.is_categorical_ = np.zeros(X.shape[1], dtype=np.uint8)
+            #self.is_categorical_ = np.zeros(X.shape[1], dtype=np.uint8)
+            self.is_categorical_ = csr_matrix((1, X.shape[1]), dtype=np.uint8)
         else:
             self.is_categorical_ = np.asarray(self.is_categorical,
                                               dtype=np.uint8)
@@ -193,7 +249,8 @@ class _BinMapper(TransformerMixin, BaseEstimator):
 
         # validate is_categorical and known_categories parameters
         for f_idx in range(n_features):
-            is_categorical = self.is_categorical_[f_idx]
+            #is_categorical = self.is_categorical_[f_idx]
+            is_categorical = self.is_categorical_[0,f_idx]
             known_cats = known_categories[f_idx]
             if is_categorical and known_cats is None:
                 raise ValueError(
@@ -211,7 +268,8 @@ class _BinMapper(TransformerMixin, BaseEstimator):
         n_bins_non_missing = []
 
         for f_idx in range(n_features):
-            if not self.is_categorical_[f_idx]:
+            #if not self.is_categorical_[f_idx]:
+            if not self.is_categorical_[0,f_idx]:
                 thresholds = _find_binning_thresholds(X[:, f_idx], max_bins)
                 n_bins_non_missing.append(thresholds.shape[0] + 1)
             else:
@@ -248,7 +306,7 @@ class _BinMapper(TransformerMixin, BaseEstimator):
         X_binned : array-like of shape (n_samples, n_features)
             The binned data (fortran-aligned).
         """
-        X = check_array(X, dtype=[X_DTYPE], force_all_finite=False)
+        X = check_array(X, accept_sparse='csr', dtype=[X_DTYPE], force_all_finite=False)
         check_is_fitted(self)
         if X.shape[1] != self.n_bins_non_missing_.shape[0]:
             raise ValueError(
@@ -256,8 +314,11 @@ class _BinMapper(TransformerMixin, BaseEstimator):
                 'to transform()'.format(self.n_bins_non_missing_.shape[0],
                                         X.shape[1])
             )
-        binned = np.zeros_like(X, dtype=X_BINNED_DTYPE, order='F')
-        _map_to_bins(X, self.bin_thresholds_, self.missing_values_bin_idx_,
+        #binned = np.zeros_like(X, dtype=X_BINNED_DTYPE, order='F')
+        binned = csr_matrix(X.shape, dtype=X_BINNED_DTYPE)
+        #_map_to_bins(X, self.bin_thresholds_, self.missing_values_bin_idx_,
+        #             binned)
+        _map_to_bins_sparse(X, self.bin_thresholds_, self.missing_values_bin_idx_,
                      binned)
         return binned
 
