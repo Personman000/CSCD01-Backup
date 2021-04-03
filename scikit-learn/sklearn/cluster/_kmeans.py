@@ -2264,8 +2264,8 @@ class BisectingKMeans(KMeans):
                 # and c is the cluster center
 
                 # the inertia value calculated by the k_means here is the sum
-                # of the SSE of all of the cluster (maybe somehow use that
-                # inertia function to calculate the SSE for the individual
+                # of the SSE of all of the cluster TODO: (maybe somehow use
+                # that inertia function to calculate the SSE for the individual
                 # cluster)
                 errors.append(np.sum(
                     np.power(cluster[i] - f_cluster_centers[i], 2)))
