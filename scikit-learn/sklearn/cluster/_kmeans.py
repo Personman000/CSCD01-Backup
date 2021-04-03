@@ -2018,3 +2018,326 @@ def kmeans_plusplus(X, n_clusters, *, x_squared_norms=None,
                                         random_state, n_local_trials)
 
     return centers, indices
+
+
+# TODO: IDK if any of the other methods need to be change
+class BisectingKMeans(KMeans):
+    """ Bisecting K-Means clustering.
+
+    TODO: maybe somehow change this reference
+    Read more in the :ref:`User Guide <k_means>`.
+
+    Parameters
+    ----------
+
+    n_clusters : int, default=8
+        The number of clusters to form as well as the number of
+        centroids to generate.
+
+    init : {'k-means++', 'random'}, callable or array-like of shape \
+            (n_clusters, n_features), default='k-means++'
+        Method for initialization:
+
+        'k-means++' : selects initial cluster centers for k-mean
+        clustering in a smart way to speed up convergence. See section
+        Notes in k_init for more details.
+
+        'random': choose `n_clusters` observations (rows) at random from data
+        for the initial centroids.
+
+        If an array is passed, it should be of shape (n_clusters, n_features)
+        and gives the initial centers.
+
+        If a callable is passed, it should take arguments X, n_clusters and a
+        random state and return an initialization.
+
+    n_init : int, default=10
+        Number of time the k-means algorithm will be run with different
+        centroid seeds. The final results will be the best output of
+        n_init consecutive runs in terms of inertia.
+
+    max_iter : int, default=300
+        Maximum number of iterations of the k-means algorithm for a
+        single run.
+
+    tol : float, default=1e-4
+        Relative tolerance with regards to Frobenius norm of the difference
+        in the cluster centers of two consecutive iterations to declare
+        convergence.
+
+    precompute_distances : {'auto', True, False}, default='auto'
+        Precompute distances (faster but takes more memory).
+
+        'auto' : do not precompute distances if n_samples * n_clusters > 12
+        million. This corresponds to about 100MB overhead per job using
+        double precision.
+
+        True : always precompute distances.
+
+        False : never precompute distances.
+
+        .. deprecated:: 0.23
+            'precompute_distances' was deprecated in version 0.22 and will be
+            removed in 1.0 (renaming of 0.25). It has no effect.
+
+    verbose : int, default=0
+        Verbosity mode.
+
+    random_state : int, RandomState instance or None, default=None
+        Determines random number generation for centroid initialization. Use
+        an int to make the randomness deterministic.
+        See :term:`Glossary <random_state>`.
+
+    copy_x : bool, default=True
+        When pre-computing distances it is more numerically accurate to center
+        the data first. If copy_x is True (default), then the original data is
+        not modified. If False, the original data is modified, and put back
+        before the function returns, but small numerical differences may be
+        introduced by subtracting and then adding the data mean. Note that if
+        the original data is not C-contiguous, a copy will be made even if
+        copy_x is False. If the original data is sparse, but not in CSR format,
+        a copy will be made even if copy_x is False.
+
+    n_jobs : int, default=None
+        The number of OpenMP threads to use for the computation. Parallelism is
+        sample-wise on the main cython loop which assigns each sample to its
+        closest center.
+
+        ``None`` or ``-1`` means using all processors.
+
+        .. deprecated:: 0.23
+            ``n_jobs`` was deprecated in version 0.23 and will be removed in
+            1.0 (renaming of 0.25).
+
+    algorithm : {"auto", "full", "elkan"}, default="auto"
+        K-means algorithm to use. The classical EM-style algorithm is "full".
+        The "elkan" variation is more efficient on data with well-defined
+        clusters, by using the triangle inequality. However it's more memory
+        intensive due to the allocation of an extra array of shape
+        (n_samples, n_clusters).
+
+        For now "auto" (kept for backward compatibiliy) chooses "elkan" but it
+        might change in the future for a better heuristic.
+
+        .. versionchanged:: 0.18
+            Added Elkan algorithm
+
+    Attributes
+    ----------
+    cluster_centers_ : ndarray of shape (n_clusters, n_features)
+        Coordinates of cluster centers. If the algorithm stops before fully
+        converging (see ``tol`` and ``max_iter``), these will not be
+        consistent with ``labels_``.
+
+    labels_ : ndarray of shape (n_samples,)
+        Labels of each point
+
+    inertia_ : float
+        Sum of squared distances of samples to their closest cluster center.
+
+    n_iter_ : int
+        Number of iterations run.
+
+    See Also
+    --------
+    KMeans : The classic implementation of the clustering method based on the
+        Lloyd's algorithm. It consumes the whole set of input data at each
+        iteration.
+
+    TODO: add link to paper linked in the issue here
+    Notes
+    -----
+    See https://www.eecs.tufts.edu/~dsculley/papers/fastkmeans.pdf
+
+    TODO: update example for bisecting k-means
+    Examples
+    --------
+
+    >>> from sklearn.cluster import KMeans
+    >>> import numpy as np
+    >>> X = np.array([[1, 2], [1, 4], [1, 0],
+    ...               [10, 2], [10, 4], [10, 0]])
+    >>> kmeans = KMeans(n_clusters=2, random_state=0).fit(X)
+    >>> kmeans.labels_
+    array([1, 1, 1, 0, 0, 0], dtype=int32)
+    >>> kmeans.predict([[0, 0], [12, 3]])
+    array([1, 0], dtype=int32)
+    >>> kmeans.cluster_centers_
+    array([[10.,  2.],
+           [ 1.,  2.]])
+    """
+    # TODO: This fit function uses the k_means function defined near the top of
+    # this file, so basically it uses an instance of KMeans class every time it
+    # runs this function, maybe instead of running k_means and using an
+    # instance of KMeans class, we can make a helper function which runs the
+    # logic in the fit() function of KMeans or we could somehow use the
+    # super.fit() function, in order to do this we will need to change the
+    # _init_centroids function, it uses the n_clusters attribute. However when
+    # we use the KMeans here, the amount of centers is two for each run
+    def fit(self, X, y=None, sample_weight=None):
+        """Compute bisecting k-means clustering.
+
+        Parameters
+        ----------
+        X : {array-like, sparse matrix} of shape (n_samples, n_features)
+            Training instances to cluster. It must be noted that the data
+            will be converted to C ordering, which will cause a memory
+            copy if the given data is not C-contiguous.
+            If a sparse matrix is passed, a copy will be made if it's not in
+            CSR format.
+
+        y : Ignored
+            Not used, present here for API consistency by convention.
+
+        sample_weight : array-like of shape (n_samples,), default=None
+            The weights for each observation in X. If None, all observations
+            are assigned equal weight.
+
+            .. versionadded:: 0.20
+
+        Returns
+        -------
+        self
+            Fitted estimator.
+        """
+
+        if X.shape[0] < self.n_clusters:
+            raise ValueError(f"n_samples={X.shape[0]} should be >= "
+                             f"n_clusters={self.n_clusters}.")
+
+        # If n_clusters == 1 then do regular k_means with n_clusters = 1
+        if (self.n_clusters == 1):
+            (cluster_centers,
+             labels,
+             inertia,
+             n_iter) = k_means(X, 1,
+                               sample_weight=sample_weight,
+                               init=self.init,
+                               n_init=self.n_init,
+                               max_iter=self.max_iter,
+                               verbose=self.verbose,
+                               precompute_distances=self.precompute_distances,
+                               tol=self.tol,
+                               random_state=self.random_state,
+                               copy_x=self.copy_x,
+                               n_jobs=self.n_jobs,
+                               algorithm=self.algorithm,
+                               return_n_iter=True)
+
+            self.cluster_centers_ = cluster_centers
+            self.labels_ = labels
+            self.inertia_ = inertia
+            self.n_iter_ = n_iter
+
+            return self
+
+        (f_cluster_centers,
+         f_labels,
+         f_inertia,
+         f_n_iter) = k_means(X, 2,
+                             sample_weight=sample_weight,
+                             init=self.init,
+                             n_init=self.n_init,
+                             max_iter=self.max_iter,
+                             verbose=self.verbose,
+                             precompute_distances=self.precompute_distances,
+                             tol=self.tol,
+                             random_state=self.random_state,
+                             copy_x=self.copy_x,
+                             n_jobs=self.n_jobs,
+                             algorithm=self.algorithm,
+                             return_n_iter=True)
+
+        # Keep splitting clusters until we have the desired amount of clusters
+        while (len(f_cluster_centers) < self.n_clusters):
+            # Get all points in each cluster
+            cluster = dict()
+            for i in range(len(f_cluster_centers)):
+                cluster[i] = X[f_labels == i]
+
+            errors = []
+
+            # Calculate SSE of every cluster we currently have
+            for i in range(len(f_cluster_centers)):
+                # SSE is the sum from i = 1 to n, (x_i - c)^2 where n is amount
+                # of points in the cluster, x_i is the ith point in the cluster
+                # and c is the cluster center
+
+                # the inertia value calculated by the k_means here is the sum
+                # of the SSE of all of the cluster (maybe somehow use that
+                # inertia function to calculate the SSE for the individual
+                # cluster)
+                errors.append(np.sum(
+                    np.power(cluster[i] - f_cluster_centers[i], 2)))
+
+            # get index of max SSE cluster
+            max_error_ind = np.argmax(errors)
+
+            # get datapoints in the cluster we will split
+            cluster_to_split = cluster[max_error_ind]
+
+            # remove max SSE cluster from list of clusters
+            f_cluster_centers = np.delete(f_cluster_centers,
+                                          max_error_ind,
+                                          axis=0)
+
+            # Delete the errors of the max SSE cluster
+            errors = np.delete(errors,
+                               max_error_ind,
+                               axis=0)
+
+            # replace the labels of the max error cluster with -1 indicating
+            # that they will be further split
+            f_labels[f_labels == max_error_ind] = -1
+
+            # any labels that are higher than max_error_ind need to be
+            # decreased by 1
+            f_labels[f_labels > max_error_ind] -= 1
+
+            # Run k_means with k = 2 on the cluster we are splitting
+            (cluster_centers,
+             labels,
+             inertia,
+             n_iter) = k_means(cluster_to_split, 2,
+                               # TODO: sample weight needs to be adjusted to
+                               # cluster_to_split as it is sample weights for
+                               # the entire X dataset
+                               # sample_weight=sample_weight,
+                               init=self.init,
+                               n_init=self.n_init,
+                               max_iter=self.max_iter,
+                               verbose=self.verbose,
+                               precompute_distances=self.precompute_distances,
+                               tol=self.tol,
+                               random_state=self.random_state,
+                               copy_x=self.copy_x,
+                               n_jobs=self.n_jobs,
+                               algorithm=self.algorithm,
+                               return_n_iter=True)
+
+            # The newly generated labels will continue off the labels in
+            # f_cluster_centers
+            labels += len(f_cluster_centers)
+
+            # Add the two new cluster centers to the final list of clusters
+            f_cluster_centers = np.append(f_cluster_centers,
+                                          cluster_centers,
+                                          axis=0)
+
+            # The labels with value -1 are the labels of the dataset that was
+            # split, replace those values with the new labels we have generated
+            f_labels[f_labels == -1] = labels
+
+            # Need to recalculate inertia
+            f_inertia = np.sum(errors) + np.sum(inertia)
+
+            # Need to append the n_iter of the k_means we have run to the final
+            # n_iter value
+            f_n_iter += n_iter
+
+        self.cluster_centers_ = f_cluster_centers
+        self.labels_ = f_labels
+        self.inertia_ = f_inertia
+        self.n_iter_ = f_n_iter
+
+        return self
