@@ -2045,9 +2045,6 @@ class BisectingKMeans(KMeans):
         'random': choose `n_clusters` observations (rows) at random from data
         for the initial centroids.
 
-        If an array is passed, it should be of shape (n_clusters, n_features)
-        and gives the initial centers.
-
         If a callable is passed, it should take arguments X, n_clusters and a
         random state and return an initialization.
 
