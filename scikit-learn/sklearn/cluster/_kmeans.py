@@ -1662,6 +1662,8 @@ class MiniBatchKMeans(KMeans):
                                 dtype=[np.float64, np.float32],
                                 order='C', accept_large_sparse=False)
 
+        # TODO: edit _check_params so that init parameter can't be an array of
+        # points
         self._check_params(X)
         random_state = check_random_state(self.random_state)
         sample_weight = _check_sample_weight(sample_weight, X, dtype=X.dtype)
@@ -2020,11 +2022,10 @@ def kmeans_plusplus(X, n_clusters, *, x_squared_norms=None,
     return centers, indices
 
 
-# TODO: IDK if any of the other methods need to be change
 class BisectingKMeans(KMeans):
     """ Bisecting K-Means clustering.
 
-    TODO: maybe somehow change this reference
+    TODO: Edit reference
     Read more in the :ref:`User Guide <k_means>`.
 
     Parameters
@@ -2296,15 +2297,18 @@ class BisectingKMeans(KMeans):
             # decreased by 1
             f_labels[f_labels > max_error_ind] -= 1
 
+            # Adjust sample_weight to be the weights for cluster_to_split
+            # rather than the entire X dataset
+            sample_cluster_weight = None
+            if (sample_weight is not None):
+                sample_cluster_weight = sample_weight[f_labels == -1]
+
             # Run k_means with k = 2 on the cluster we are splitting
             (cluster_centers,
              labels,
              inertia,
              n_iter) = k_means(cluster_to_split, 2,
-                               # TODO: sample weight needs to be adjusted to
-                               # cluster_to_split as it is sample weights for
-                               # the entire X dataset
-                               # sample_weight=sample_weight,
+                               sample_weight=sample_cluster_weight,
                                init=self.init,
                                n_init=self.n_init,
                                max_iter=self.max_iter,
