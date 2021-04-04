@@ -2035,9 +2035,7 @@ class BisectingKMeans(KMeans):
         The number of clusters to form as well as the number of
         centroids to generate.
 
-    TODO: Edit this so that it only can take in k-means++, random or a callable
-    init : {'k-means++', 'random'}, callable or array-like of shape \
-            (n_clusters, n_features), default='k-means++'
+    init : {'k-means++', 'random'}, callable, default='k-means++'
         Method for initialization:
 
         'k-means++' : selects initial cluster centers for k-mean
