@@ -1316,15 +1316,14 @@ def test_bisecting_predict_dense_sparse(Estimator, init):
 @pytest.mark.parametrize("array_constr", [np.array, sp.csr_matrix],
                          ids=["dense", "sparse"])
 @pytest.mark.parametrize("dtype", [np.int32, np.int64])
-@pytest.mark.parametrize("init", ["k-means++", "ndarray"])
+@pytest.mark.parametrize("init", ["k-means++", "random"])
 @pytest.mark.parametrize("Estimator", [BisectingKMeans])
 def test_bisecting_integer_input(Estimator, array_constr, dtype, init):
     # Check that BisectingKMeans work with integer input.
     X_dense = np.array([[0, 0], [10, 10], [12, 9], [-1, 1], [2, 0], [8, 10]])
     X = array_constr(X_dense, dtype=dtype)
 
-    n_init = 1 if init == "ndarray" else 10
-    init = X_dense[:2] if init == "ndarray" else init
+    n_init = 1
 
     bkm = Estimator(n_clusters=2, init=init, n_init=n_init, random_state=0)
 
