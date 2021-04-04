@@ -2200,10 +2200,12 @@ class BisectingKMeans(KMeans):
         self
             Fitted estimator.
         """
+        X = self._validate_data(X, accept_sparse='csr',
+                            dtype=[np.float64, np.float32],
+                            order='C', copy=self.copy_x,
+                            accept_large_sparse=False)
 
-        if X.shape[0] < self.n_clusters:
-            raise ValueError(f"n_samples={X.shape[0]} should be >= "
-                             f"n_clusters={self.n_clusters}.")
+        self._check_params(X)
 
         # If n_clusters == 1 then do regular k_means with n_clusters = 1
         if (self.n_clusters == 1):
