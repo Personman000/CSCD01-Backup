@@ -22,6 +22,7 @@ from sklearn.metrics import pairwise_distances_argmin
 from sklearn.metrics.cluster import v_measure_score
 from sklearn.cluster import KMeans, k_means, kmeans_plusplus
 from sklearn.cluster import MiniBatchKMeans
+from sklearn.cluster import BisectingKMeans
 from sklearn.cluster._kmeans import _labels_inertia
 from sklearn.cluster._kmeans import _mini_batch_step
 from sklearn.cluster._k_means_fast import _relocate_empty_clusters_dense
@@ -265,7 +266,6 @@ def test_all_init(Estimator, data, init):
     km = Estimator(init=init, n_clusters=n_clusters, random_state=42,
                    n_init=n_init).fit(data)
     _check_fitted_model(km)
-
 
 @pytest.mark.parametrize("init", ["random", "k-means++", centers,
                                   lambda X, k, random_state: centers],
@@ -1091,3 +1091,315 @@ def test_kmeans_plusplus_dataorder():
     centers_fortran, _ = kmeans_plusplus(X_fortran, n_clusters, random_state=0)
 
     assert_allclose(centers_c, centers_fortran)
+
+
+@pytest.mark.parametrize("array_constr", [np.array, sp.csr_matrix],
+                         ids=["dense", "sparse"])
+@pytest.mark.parametrize("algo", ["full", "elkan"])
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+def test_bisecting_kmeans_simple_results(array_constr, algo, dtype):
+    # Checks that BisectingKMeans works as intended and simply runs a 2-cluster KMean
+    # when the n_clusters=2
+    X = array_constr([[0, 0], [0.5, 0], [0.5, 1], [1, 1]], dtype=dtype)
+
+    expected_labels = [1, 1, 0, 0]
+    expected_inertia = 0.25
+    expected_centers = np.array([[0.75, 1],[0.25, 0]], dtype=dtype)
+    expected_n_iter = 2
+
+    bkmeans = BisectingKMeans(n_clusters=2, n_init=1, algorithm=algo)
+    bkmeans.fit(X)
+
+    assert np.array_equal(bkmeans.labels_, expected_labels) or np.array_equal(bkmeans.labels_, np.flip(expected_labels))
+    assert_allclose(bkmeans.inertia_, expected_inertia)
+    assert np.array_equal(bkmeans.cluster_centers_, expected_centers) or np.array_equal(bkmeans.cluster_centers_, np.flipud(expected_centers))
+    assert bkmeans.n_iter_ == expected_n_iter
+
+
+@pytest.mark.parametrize("array_constr", [np.array, sp.csr_matrix],
+                         ids=["dense", "sparse"])
+@pytest.mark.parametrize("algo", ["full", "elkan"])
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+def test_bisecting_kmeans_results(array_constr, algo, dtype):
+    # Checks that BisectingKMeans works as intended on toy dataset by comparing with
+    # expected results computed by hand.
+    X = array_constr([[0, 0], [0.5, 0], [0.5, 1], [1, 1], [9, 6], [10,10]], dtype=dtype)
+
+    expected_labels_1 = [0, 0, 0, 0, 1, 2]
+    expected_labels_2 = [0, 0, 0, 0, 2, 1]
+    expected_inertia = 1.5
+    expected_centers_1 = np.array([[0.5, 0.5], [9, 6], [10, 10]], dtype=dtype)
+    expected_centers_2 = np.array([[0.5, 0.5], [10, 10], [9, 6]], dtype=dtype)
+
+    expected_n_iter = 3
+
+    bkmeans = BisectingKMeans(n_clusters=3, n_init=1, algorithm=algo)
+    bkmeans.fit(X)
+
+    assert np.array_equal(bkmeans.labels_, expected_labels_1) or np.array_equal(bkmeans.labels_, expected_labels_2)
+    assert_allclose(bkmeans.inertia_, expected_inertia)
+    assert np.array_equal(bkmeans.cluster_centers_, expected_centers_1) or np.array_equal(bkmeans.cluster_centers_, expected_centers_2)
+    assert bkmeans.n_iter_ == expected_n_iter
+
+
+@pytest.mark.parametrize("distribution", ["normal", "blobs"])
+@pytest.mark.parametrize("array_constr", [np.array, sp.csr_matrix],
+                         ids=["dense", "sparse"])
+@pytest.mark.parametrize("tol", [1e-2, 1e-8, 1e-100, 0])
+def test_bisecting_kmeans_elkan_results(distribution, array_constr, tol):
+    # Check that results are identical between lloyd and elkan algorithms
+    rnd = np.random.RandomState(0)
+    if distribution == "normal":
+        X = rnd.normal(size=(5000, 10))
+    else:
+        X, _ = make_blobs(random_state=rnd)
+    X[X < 0] = 0
+    X = array_constr(X)
+
+    bkm_full = BisectingKMeans(algorithm="full", n_clusters=5,
+                     random_state=0, n_init=1, tol=tol)
+    bkm_elkan = BisectingKMeans(algorithm="elkan", n_clusters=5,
+                      random_state=0, n_init=1, tol=tol)
+
+    bkm_full.fit(X)
+    bkm_elkan.fit(X)
+    assert_allclose(bkm_elkan.cluster_centers_, bkm_full.cluster_centers_)
+    assert_array_equal(bkm_elkan.labels_, bkm_full.labels_)
+    assert bkm_elkan.n_iter_ == bkm_full.n_iter_
+    assert bkm_elkan.inertia_ == pytest.approx(bkm_full.inertia_, rel=1e-6)
+
+
+@pytest.mark.parametrize("algorithm", ["full", "elkan"])
+def test_bisecting_kmeans_convergence(algorithm):
+    # Check that KMeans stops when convergence is reached when tol=0. (#16075)
+    rnd = np.random.RandomState(0)
+    X = rnd.normal(size=(5000, 10))
+    max_iter = 300
+
+    bkm = BisectingKMeans(algorithm=algorithm, n_clusters=5, random_state=0,
+                n_init=1, tol=0, max_iter=max_iter).fit(X)
+
+    assert bkm.n_iter_ < max_iter
+
+
+@pytest.mark.parametrize("data", [X, X_csr], ids=["dense", "sparse"])
+@pytest.mark.parametrize("init", ["random", "k-means++"],
+                         ids=["random", "k-means++"])
+@pytest.mark.parametrize("Estimator", [BisectingKMeans])
+def test_bisecting_all_init(Estimator, data, init):
+    # Check BisectingKMeans with all possible inits.
+    n_init = 10 if isinstance(init, str) else 1
+    km = Estimator(init=init, n_clusters=n_clusters, random_state=42,
+                   n_init=n_init).fit(data)
+    _check_fitted_model(km)
+
+
+@pytest.mark.parametrize("Estimator", [BisectingKMeans])
+def test_bisecting_fortran_aligned_data(Estimator):
+    # Check that BisectingKMeans works with fortran-aligned data.
+    X_fortran = np.asfortranarray(X)
+
+    km_c = Estimator(n_clusters=n_clusters, n_init=1,
+                     random_state=42).fit(X)
+    km_f = Estimator(n_clusters=n_clusters, n_init=1,
+                     random_state=42).fit(X_fortran)
+    assert_allclose(km_c.cluster_centers_, km_f.cluster_centers_)
+    assert_array_equal(km_c.labels_, km_f.labels_)
+
+
+@pytest.mark.parametrize('algo', ['full', 'elkan'])
+@pytest.mark.parametrize('dtype', [np.float32, np.float64])
+@pytest.mark.parametrize('constructor', [np.asarray, sp.csr_matrix])
+@pytest.mark.parametrize('max_iter, tol', [
+    (2, 1e-7),    # strict non-convergence
+    (2, 1e-1),    # loose non-convergence
+    (300, 1e-7),  # strict convergence
+    (300, 1e-1),  # loose convergence
+])
+
+
+def test_bisecting_k_means_fit_predict(algo, dtype, constructor, max_iter, tol):
+    # check that fit.predict gives same result as fit_predict
+    # There's a very small chance of failure with elkan on unstructured dataset
+    # because predict method uses fast euclidean distances computation which
+    # may cause small numerical instabilities.
+    # NB: This test is largely redundant with respect to test_predict and
+    #     test_predict_equal_labels.  This test has the added effect of
+    #     testing idempotence of the fittng procesdure which appears to
+    #     be where it fails on some MacOS setups.
+    if sys.platform == "darwin":
+        pytest.xfail(
+            "Known failures on MacOS, See "
+            "https://github.com/scikit-learn/scikit-learn/issues/12644")
+
+    rng = np.random.RandomState(1)
+
+    X = make_blobs(n_samples=1000, n_features=10, centers=10,
+                   random_state=rng)[0].astype(dtype, copy=False)
+    X = constructor(X)
+
+    bkmeans = BisectingKMeans(algorithm=algo, n_clusters=10, random_state=rng,
+                    tol=tol, max_iter=max_iter)
+
+    labels_1 = bkmeans.fit(X).predict(X)
+    labels_2 = bkmeans.fit_predict(X)
+
+    # Due to randomness in the order in which chunks of data are processed when
+    # using more than one thread, the absolute values of the labels can be
+    # different between the 2 strategies but they should correspond to the same
+    # clustering.
+    assert v_measure_score(labels_1, labels_2) == pytest.approx(1, abs=1e-15)
+
+
+@pytest.mark.parametrize("algorithm", ["full", "elkan"])
+@pytest.mark.parametrize("tol", [1e-2, 0])
+def test_bisecting_k_means_verbose(algorithm, tol, capsys):
+    # Check verbose mode of BisectingKMeans for better coverage.
+    X = np.random.RandomState(0).normal(size=(5000, 10))
+
+    BisectingKMeans(algorithm=algorithm, n_clusters=n_clusters, random_state=42,
+           init="random", n_init=1, tol=tol, verbose=1).fit(X)
+
+    captured = capsys.readouterr()
+
+    assert re.search(r"Initialization complete", captured.out)
+    assert re.search(r"Iteration [0-9]+, inertia", captured.out)
+
+    if tol == 0:
+        assert re.search(r"strict convergence", captured.out)
+    else:
+        assert re.search(r"center shift .* within tolerance", captured.out)
+
+
+def test_bisecting_k_means_copyx():
+    # Check that copy_x=False returns nearly equal X after de-centering.
+    my_X = X.copy()
+    bkm = BisectingKMeans(copy_x=False, n_clusters=n_clusters, random_state=42)
+    bkm.fit(my_X)
+    _check_fitted_model(bkm)
+
+    # check that my_X is de-centered
+    assert_allclose(my_X, X)
+
+
+@pytest.mark.parametrize("Estimator", [BisectingKMeans])
+def test_bisecting_score_max_iter(Estimator):
+    # Check that fitting BisectingKMeans with more iterations gives
+    # better score
+    X = np.random.RandomState(0).randn(100, 10)
+
+    bkm1 = Estimator(n_init=1, random_state=42, max_iter=1)
+    s1 = bkm1.fit(X).score(X)
+    bkm2 = Estimator(n_init=1, random_state=42, max_iter=10)
+    s2 = bkm2.fit(X).score(X)
+    assert s2 > s1
+
+#---------------------------
+
+@pytest.mark.parametrize("init", ["random", "k-means++"],
+                         ids=["random", "k-means++"])
+@pytest.mark.parametrize("Estimator", [BisectingKMeans])
+def test_bisecting_predict_dense_sparse(Estimator, init):
+    # check that models trained on sparse input also works for dense input at
+    # predict time and vice versa.
+    n_init = 10 if isinstance(init, str) else 1
+    bkm = Estimator(n_clusters=n_clusters, init=init, n_init=n_init,
+                   random_state=0)
+
+    bkm.fit(X_csr)
+    assert_array_equal(bkm.predict(X), bkm.labels_)
+
+    bkm.fit(X)
+    assert_array_equal(bkm.predict(X_csr), bkm.labels_)
+
+
+@pytest.mark.parametrize("array_constr", [np.array, sp.csr_matrix],
+                         ids=["dense", "sparse"])
+@pytest.mark.parametrize("dtype", [np.int32, np.int64])
+@pytest.mark.parametrize("init", ["k-means++", "ndarray"])
+@pytest.mark.parametrize("Estimator", [BisectingKMeans])
+def test_bisecting_integer_input(Estimator, array_constr, dtype, init):
+    # Check that BisectingKMeans work with integer input.
+    X_dense = np.array([[0, 0], [10, 10], [12, 9], [-1, 1], [2, 0], [8, 10]])
+    X = array_constr(X_dense, dtype=dtype)
+
+    n_init = 1 if init == "ndarray" else 10
+    init = X_dense[:2] if init == "ndarray" else init
+
+    bkm = Estimator(n_clusters=2, init=init, n_init=n_init, random_state=0)
+
+    bkm.fit(X)
+
+    # Internally integer input should be converted to float64
+    assert bkm.cluster_centers_.dtype == np.float64
+
+    expected_labels = [0, 1, 1, 0, 0, 1]
+    assert_allclose(v_measure_score(bkm.labels_, expected_labels), 1)
+
+
+@pytest.mark.parametrize("Estimator", [BisectingKMeans])
+def test_bisecting_transform(Estimator):
+    # Check the transform method
+    bkm = Estimator(n_clusters=n_clusters).fit(X)
+
+    # Transorfming cluster_centers_ should return the pairwise distances
+    # between centers
+    Xt = bkm.transform(bkm.cluster_centers_)
+    assert_allclose(Xt, pairwise_distances(bkm.cluster_centers_))
+    # In particular, diagonal must be 0
+    assert_array_equal(Xt.diagonal(), np.zeros(n_clusters))
+
+    # Transorfming X should return the pairwise distances between X and the
+    # centers
+    Xt = bkm.transform(X)
+    assert_allclose(Xt, pairwise_distances(X, bkm.cluster_centers_))
+
+
+@pytest.mark.parametrize("Estimator", [BisectingKMeans])
+def test_bisecting_fit_transform(Estimator):
+    # Check equivalence between fit.transform and fit_transform
+    X1 = Estimator(random_state=0, n_init=1).fit(X).transform(X)
+    X2 = Estimator(random_state=0, n_init=1).fit_transform(X)
+    assert_allclose(X1, X2)
+
+
+def test_bisecting_n_init():
+    # Check that increasing the number of init increases the quality
+    previous_inertia = np.inf
+    for n_init in [1, 5, 10]:
+        # set max_iter=1 to avoid finding the global minimum and get the same
+        # inertia each time
+        bkm = BisectingKMeans(n_clusters=n_clusters, init="random", n_init=n_init,
+                    random_state=0, max_iter=1).fit(X)
+        assert bkm.inertia_ <= previous_inertia
+
+
+@pytest.mark.parametrize("data", [X, X_csr], ids=["dense", "sparse"])
+@pytest.mark.parametrize("Estimator", [BisectingKMeans])
+def test_bisecting_float_precision(Estimator, data):
+    # Check that the results are the same for single and double precision.
+    bkm = Estimator(n_init=1, random_state=0)
+
+    inertia = {}
+    Xt = {}
+    centers = {}
+    labels = {}
+
+    for dtype in [np.float64, np.float32]:
+        X = data.astype(dtype, **_astype_copy_false(data))
+        bkm.fit(X)
+
+        inertia[dtype] = bkm.inertia_
+        Xt[dtype] = bkm.transform(X)
+        centers[dtype] = bkm.cluster_centers_
+        labels[dtype] = bkm.labels_
+
+        # dtype of cluster centers has to be the dtype of the input data
+        assert bkm.cluster_centers_.dtype == dtype
+
+    # compare arrays with low precision since the difference between 32 and
+    # 64 bit comes from an accumulation of rounding errors.
+    assert_allclose(inertia[np.float32], inertia[np.float64], rtol=1e-5)
+    assert_allclose(Xt[np.float32], Xt[np.float64], rtol=1e-5)
+    assert_allclose(centers[np.float32], centers[np.float64], rtol=1e-5)
+    assert_array_equal(labels[np.float32], labels[np.float64])
