@@ -2023,7 +2023,7 @@ def kmeans_plusplus(X, n_clusters, *, x_squared_norms=None,
 
 
 class BisectingKMeans(KMeans):
-    """ Bisecting K-Means clustering.
+    """Bisecting K-Means clustering.
 
     TODO: Edit reference
     Read more in the :ref:`User Guide <k_means>`.
@@ -2035,6 +2035,7 @@ class BisectingKMeans(KMeans):
         The number of clusters to form as well as the number of
         centroids to generate.
 
+    TODO: Edit this so that it only can take in k-means++, random or a callable
     init : {'k-means++', 'random'}, callable or array-like of shape \
             (n_clusters, n_features), default='k-means++'
         Method for initialization:
@@ -2167,12 +2168,23 @@ class BisectingKMeans(KMeans):
     array([[10.,  2.],
            [ 1.,  2.]])
     """
-    # TODO: This fit function uses the k_means function defined near the top of
-    # this file, so basically it uses an instance of KMeans class every time it
-    # runs this function, maybe instead of running k_means and using an
-    # instance of KMeans class, we can make a helper function which runs the
-    # logic in the fit() function of KMeans or we could somehow use the
-    # super.fit() function, in order to do this we will need to change the
+    def _check_params(self, X):
+        # Init
+        if not (callable(self.init) or
+                (isinstance(self.init, str)
+                 and self.init in ["k-means++", "random"])):
+            raise ValueError(
+                f"init should be either 'k-means++', 'random' or a "
+                f"callable, got '{self.init}' instead.")
+
+        super()._check_params(X)
+
+    # TODO (optional): This fit function uses the k_means function defined near
+    # the top of this file, so basically it uses an instance of KMeans class
+    # every time it runs this function, maybe instead of running k_means and
+    # using an instance of KMeans class, we can make a helper function which
+    # runs the logic in the fit() function of KMeans or we could somehow use
+    # the super.fit() function, in order to do this we will need to change the
     # _init_centroids function, it uses the n_clusters attribute. However when
     # we use the KMeans here, the amount of centers is two for each run
     def fit(self, X, y=None, sample_weight=None):
@@ -2202,9 +2214,9 @@ class BisectingKMeans(KMeans):
             Fitted estimator.
         """
         X = self._validate_data(X, accept_sparse='csr',
-                            dtype=[np.float64, np.float32],
-                            order='C', copy=self.copy_x,
-                            accept_large_sparse=False)
+                                dtype=[np.float64, np.float32],
+                                order='C', copy=self.copy_x,
+                                accept_large_sparse=False)
 
         self._check_params(X)
 
@@ -2267,9 +2279,10 @@ class BisectingKMeans(KMeans):
                 # and c is the cluster center
 
                 # the inertia value calculated by the k_means here is the sum
-                # of the SSE of all of the cluster TODO: (maybe somehow use
-                # that inertia function to calculate the SSE for the individual
-                # cluster)
+                # of the SSE of all of the cluster
+
+                # TODO (optional): (maybe somehow use that inertia function to
+                # calculate the SSE for the individual cluster)
                 errors.append(np.sum(
                     np.power(cluster[i] - f_cluster_centers[i], 2)))
 
